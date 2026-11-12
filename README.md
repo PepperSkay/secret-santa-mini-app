@@ -4,4 +4,4 @@
 
 ## Vercel
 
-Для просмотра демо откройте деплой с параметром `?preview=1`. Боевой режим требует подключённого API бота и Telegram `initData`.
+Фронтенд работает с подключённым API бота и Telegram `initData`. Адрес API можно задать через `window.__SANTA_API_BASE__` перед загрузкой `assets/app.js`.
