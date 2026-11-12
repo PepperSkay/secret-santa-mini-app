@@ -79,6 +79,7 @@
     snow: loadStorage("santa.snow", true),
     reduce: loadStorage("santa.reduce", false),
   };
+  let activeSync=null; const syncSessions=new Map();
   let pageToken = 0,
     timer = null,
     toastTimer,
@@ -137,8 +138,7 @@
       const data = await response
         .json()
         .catch(() => ({ error: "Сервер временно недоступен" }));
-      if (!response.ok)
-        throw Error(data.error || "Не удалось выполнить действие");
+      if (!response.ok) { const failure=Error(data.error || "Не удалось выполнить действие"); failure.status=response.status; throw failure; }
       return data;
     } catch (e) {
       if (e.name === "AbortError")
@@ -291,7 +291,7 @@
   function gameCard(g) {
     const done = S.progress.levels.filter((l) => l.game === g.id).length;
     const record = S.progress.records?.[g.id] || 0;
-    return `<button class="game-card" data-game="${g.id}" aria-label="${esc(g.name)}"><span class="game-art ${g.id} ${g.holiday ? "holiday-art" : ""}">${g.holiday ? g.icon : ""}<span class="badge">${g.endless ? "∞ РЕКОРД" : "❄ 3–8"}</span></span><strong>${g.name}</strong><small>${g.endless ? `Рекорд: ${fmt(record)}` : `${done}/10 уровней`}</small></button>`;
+    return `<button class="game-card" data-game="${g.id}" aria-label="${esc(g.name)}"><span class="game-art ${g.id} ${g.holiday ? "holiday-art" : ""}"><span class="badge">${g.endless ? "∞ РЕКОРД" : "❄ 3–8"}</span></span><strong>${g.name}</strong><small>${g.endless ? `Рекорд: ${fmt(record)}` : `${done}/10 уровней`}</small></button>`;
   }
   function head(text, tab) {
     return `<div class="section-head"><h2>${text}</h2>${tab ? `<button data-tab="${tab}" aria-label="Показать всё">›</button>` : ""}</div>`;
@@ -472,7 +472,8 @@
   }
   function wishlist() {
     header("Мой вишлист");
-    view.innerHTML = `<section class="panel"><h2>Что тебя порадует?</h2><p style="margin:10px 0">Твой Санта увидит этот список после распределения.</p><form id="wish" class="stack"><label>Пожелания<textarea name="wishlist" maxlength="1500" minlength="2" required>${esc(S.me.user.wishlist)}</textarea></label><button class="primary">Сохранить вишлист</button></form></section>${S.me.assignment ? `<section class="panel"><h3>Твой получатель: ${esc(S.me.assignment.alias)}</h3><p>${esc(S.me.assignment.wishlist)}</p></section>` : ""}`;
+    view.innerHTML = `<section class="panel"><h2>Что тебя порадует?</h2><p style="margin:10px 0">Твой Санта увидит этот список после распределения.</p><form id="wish" class="stack"><label>Пожелания<textarea name="wishlist" maxlength="1500" minlength="2" required>${esc(S.me.user.wishlist)}</textarea></label><button class="primary">Сохранить вишлист</button></form></section>${S.me.assignment ? `<section class="panel"><h3>Твой получатель: ${esc(S.me.assignment.alias)}</h3><p>${esc(S.me.assignment.wishlist)}</p><button class="secondary wide" id="gift-photo">Отправить фото вручённого подарка</button></section>` : ""}`;
+    $("#gift-photo")?.addEventListener("click",()=>{sheet('<h2>Фото подарка</h2><form id="gift-photo-form" class="stack"><input type="file" name="photo" accept="image/*" required><textarea name="caption" maxlength="1000" placeholder="Подпись"></textarea><button class="primary">Отправить на проверку</button></form>');$("#gift-photo-form").onsubmit=async e=>{e.preventDefault();e.submitter.disabled=true;try{const response=await fetch((window.__SANTA_API_BASE__||'')+'/api/photo',{method:'POST',headers:{'X-Telegram-Init-Data':tg?.initData||''},body:new FormData(e.target)});const result=await response.json();if(!response.ok)throw Error(result.error||'Не удалось отправить фото');closeSheet();toast('Фото отправлено на проверку')}catch(error){toast(error.message)}finally{if(e.submitter.isConnected)e.submitter.disabled=false}}});
     $("#wish").onsubmit = async (e) => {
       e.preventDefault();
       const b = e.submitter;
@@ -506,30 +507,14 @@
   }
   async function catalog() {
     header("Каталог Санты");
-    try {
-      const c = await api("/api/catalog");
-      if (S.tab !== "catalog") return;
-      view.innerHTML = `<section class="panel"><h2>Слова, которые греют</h2>${[
-        ["Анонимное поздравление", c.custom_price],
-        ["Фирменное от Санты", c.official_price],
-      ]
-        .map(
-          ([n, p]) =>
-            `<div class="menu-row"><span>${n}</span><button class="secondary demo-pay" style="margin-left:auto">${p} ⭐ · ❄ ${Math.floor(p * 0.2)}</button></div>`,
-        )
-        .join(
-          "",
-        )}</section>${head("Наш мерч")}<section class="panel">${c.products.map((p) => `<div class="menu-row"><span>${esc(p.name)}</span><button class="secondary demo-pay">${p.price} ⭐ · ❄ ${p.snowflakes}</button></div>`).join("") || "<p>Товары пока не опубликованы.</p>"}</section><p class="notice">Это отдельное превью. Оплата реальными Stars здесь отключена.</p>`;
-      view
-        .querySelectorAll(".demo-pay")
-        .forEach(
-          (b) =>
-            (b.onclick = () => toast("Оплата доступна в действующем боте")),
-        );
-    } catch (e) {
-      toast(e.message);
-    }
+    try {const c=await api("/api/catalog");if(S.tab!=="catalog")return;
+      view.innerHTML='<section class="panel"><h2>Слова, которые греют</h2>'+[["custom","Анонимное поздравление",c.custom_price],["official","Фирменное от Санты",c.official_price]].map(([kind,title,price])=>'<div class="menu-row"><span>'+title+'</span><button class="secondary" data-order-kind="'+kind+'" '+(!c.payments_enabled?'disabled':'')+'>'+price+' ⭐ · ❄ '+Math.floor(price/5)+'</button></div>').join('')+'</section>'+head("Наш мерч")+'<section class="panel">'+c.products.map(p=>'<div class="menu-row"><div><h3>'+esc(p.name)+'</h3><p>'+esc(p.description||'')+'</p></div><button class="secondary" data-order-product="'+p.id+'" '+(!c.payments_enabled?'disabled':'')+'>'+p.price+' ⭐ · ❄ '+p.snowflakes+'</button></div>').join('')+'</section><section class="panel"><button class="secondary wide" id="respect">Поблагодарить Санту ⭐</button></section>'+(!c.payments_enabled?'<p class="notice">Оплата временно отключена администратором.</p>':'');
+      view.querySelectorAll('[data-order-kind]').forEach(b=>b.onclick=()=>{const kind=b.dataset.orderKind;sheet('<h2>'+ (kind==='custom'?'Твоё поздравление':'Фирменное от Санты')+'</h2><p>Получатель должен уже открыть бота.</p><form id="greeting-order" class="stack"><label>Username получателя<input name="recipient" placeholder="@username" required></label>'+(kind==='custom'?'<label>Текст<textarea name="text" minlength="3" maxlength="500" required></textarea></label>':'<p class="notice">Текст фирменного поздравления останется сюрпризом.</p>')+'<button class="primary">Перейти к оплате Stars</button></form>');$('#greeting-order').onsubmit=async e=>{e.preventDefault();e.submitter.disabled=true;try{await payInvoice({kind,...Object.fromEntries(new FormData(e.target))})}finally{if(e.submitter.isConnected)e.submitter.disabled=false}}});
+      view.querySelectorAll('[data-order-product]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await payInvoice({kind:'gift_product',product_id:+b.dataset.orderProduct})}finally{b.disabled=false}});
+      $('#respect').onclick=()=>{sheet('<h2>Респект Санте ⭐</h2><form id="respect-form" class="stack"><label>Сколько звёзд?<input type="number" name="amount" min="1" max="100000" required value="1"></label><button class="primary">Поблагодарить</button></form>');$('#respect-form').onsubmit=async e=>{e.preventDefault();e.submitter.disabled=true;try{await payInvoice({kind:'respect',amount:+new FormData(e.target).get('amount')})}finally{if(e.submitter.isConnected)e.submitter.disabled=false}}};
+    }catch(e){toast(e.message)}
   }
+  async function payInvoice(payload){try{const d=await post('/api/orders/invoice',payload);closeSheet();if(tg?.openInvoice)tg.openInvoice(d.invoice_url,async status=>{if(status==='paid'){toast('Оплата принята');S.me=await api('/api/me');header('Каталог Санты')}});else if(tg?.openTelegramLink)tg.openTelegramLink(d.invoice_url);else window.open(d.invoice_url,'_blank','noopener')}catch(e){toast(e.message)}}
   async function referral() {
     header("Пригласи друга");
     try {
@@ -598,7 +583,7 @@
     const g = games.find((g) => g.id === game);
     if (g.endless) {
       const record = S.progress.records?.[game] || 0;
-      view.innerHTML = `<section class="level-hero"><span class="game-art ${game} ${g.holiday ? "holiday-art" : ""}">${g.holiday ? g.icon : ""}</span><div><h1>${g.name}</h1><p>Бесконечная игра · ${g.genre}</p></div><button class="icon-button" id="favorite" aria-label="В избранное">${S.favorites.includes(game) ? "💜" : "♡"}</button></section><p class="game-instructions">${g.desc}</p><section class="panel"><div class="row"><div><small>Твой максимальный рекорд</small><h2>${fmt(record)} очков</h2></div><span style="font-size:34px">🏆</span></div><p class="notice">Уровней нет: играй сколько сможешь. Новый рекорд сохраняется после каждого удачного хода, даже если закрыть игру.</p><button class="primary wide" id="start-record">Начать игру</button></section><button class="secondary wide" data-tab="games">Все игры</button>`;
+      view.innerHTML = `<section class="level-hero"><span class="game-art ${game} ${g.holiday ? "holiday-art" : ""}"></span><div><h1>${g.name}</h1><p>Бесконечная игра · ${g.genre}</p></div><button class="icon-button" id="favorite" aria-label="В избранное">${S.favorites.includes(game) ? "💜" : "♡"}</button></section><p class="game-instructions">${g.desc}</p><section class="panel"><div class="row"><div><small>Твой максимальный рекорд</small><h2>${fmt(record)} очков</h2></div><span style="font-size:34px">🏆</span></div><p class="notice">Уровней нет: играй сколько сможешь. Новый рекорд сохраняется после каждого удачного хода, даже если закрыть игру.</p><button class="primary wide" id="start-record">Начать игру</button></section><button class="secondary wide" data-tab="games">Все игры</button>`;
       $("#start-record").onclick = () => startGame(game, 0);
       $("#favorite").onclick = () => {
         S.favorites = S.favorites.includes(game)
@@ -613,7 +598,7 @@
     const passed = new Set(
       S.progress.levels.filter((x) => x.game === game).map((x) => x.level),
     );
-    view.innerHTML = `<section class="level-hero"><span class="game-art ${game} ${g.holiday ? "holiday-art" : ""}">${g.holiday ? g.icon : ""}</span><div><h1>${g.name}</h1><p>10 уровней · ${g.genre}</p></div><button class="icon-button" id="favorite" aria-label="В избранное">${S.favorites.includes(game) ? "💜" : "♡"}</button></section><p class="game-instructions">${g.desc}</p><div class="levels">${Array.from(
+    view.innerHTML = `<section class="level-hero"><span class="game-art ${game} ${g.holiday ? "holiday-art" : ""}"></span><div><h1>${g.name}</h1><p>10 уровней · ${g.genre}</p></div><button class="icon-button" id="favorite" aria-label="В избранное">${S.favorites.includes(game) ? "💜" : "♡"}</button></section><p class="game-instructions">${g.desc}</p><div class="levels">${Array.from(
       { length: 10 },
       (_, i) => {
         const l = i + 1,
@@ -651,6 +636,8 @@
     try {
       const d = await post("/api/games/start", { game, level });
       if (epoch !== gameEpoch) return;
+      if(!d.runtime || d.runtime.engine_version!==2)throw Error("Обнови приложение: сервер готовит новую версию игр");
+      activeSync=new ArcadeSync.Session(d,syncOptions());syncSessions.set(d.id,activeSync);
       S.session = d;
       S.game = game;
       S.level = level;
@@ -821,7 +808,7 @@
         timer = setTimeout(async () => {
           if (S.tab !== "playing" || !S.session) return;
           try {
-            S.session = await api("/api/games/session/" + S.session.id);
+            S.session.state = activeSync?.id===S.session.id ? activeSync.view() : S.session.state;
             drawGame();
           } catch (e) {
             toast(e.message);
@@ -934,6 +921,7 @@
       return;
     }
     clearTimeout(timer);
+    if(activeSync?.id===S.session.id)S.session.state=activeSync.view();
     const s = S.session.state,
       g = games.find((x) => x.id === s.game);
     const recordMode = Boolean(s.record_mode);
@@ -959,7 +947,7 @@
       refresh: async () => {
         if (S.busy || S.session?.id !== id || epoch !== gameEpoch) return;
         try {
-          const fresh = await api("/api/games/session/" + id);
+          const fresh = activeSync?.id===id ? {id,version:S.session.version,state:activeSync.view()} : await api("/api/games/session/" + id);
           if (S.busy || S.session?.id !== id || epoch !== gameEpoch || fresh.version < S.session.version) return;
           S.session = fresh;
           drawGame();
@@ -1093,10 +1081,8 @@
           el.getBoundingClientRect(),
         ]),
       );
-      const result = await post("/api/games/session/" + id + "/move", {
-        version: S.session.version,
-        action,
-      });
+      if(!activeSync||activeSync.id!==id)throw Error("Открой игру заново");
+      const result=activeSync.step(action);
       if (epoch !== gameEpoch) return;
       const hit = result.state.effects?.flat() || [];
       if (motion() && hit.length && S.game === "mahjong")
@@ -1106,14 +1092,17 @@
             .filter(Boolean),
           { scale: 0.65, opacity: 0, y: -12, duration: 0.2, ease: "power2.in" },
         );
-      if (S.game === "blocks" && result.state.cleared?.length)
+      if (S.game === "blocks" && result.state.cleared?.length) {
+        const piece=S.session.state.tray[action.piece];
+        piece?.forEach(([dx,dy])=>{const cell=view.querySelector('[data-block-cell="'+((action.y+dy)*8+action.x+dx)+'"]');cell?.classList.add("filled","color-"+(action.piece+1));});
         await animateBlockClear(result.state.cleared);
-      if(result.state.record_mode){S.progress.records ||= {};const before=S.progress.records[S.game]||0;S.progress.records[S.game]=Math.max(before,result.record||0);S.progress.score+=S.progress.records[S.game]-before;}
+      }
+      if(result.state.record_mode){S.progress.records ||= {};const before=S.progress.records[S.game]||0;S.progress.records[S.game]=Math.max(before,result.state.score||0);S.progress.score+=S.progress.records[S.game]-before;}
       S.session = result;
       S.selected = null;
       if (result.balance !== undefined) S.me.user.snowflakes = result.balance;
       if (S.game === "match3") await updateMatch(result);
-      else drawGame();
+      else { drawGame(); if(S.game==="merge2048"&&motion())gsap.fromTo("#play-board .merge-tile",{x:action.direction==="left"?24:action.direction==="right"?-24:0,y:action.direction==="up"?24:action.direction==="down"?-24:0},{x:0,y:0,duration:.16,ease:"power2.out",clearProps:"transform"}); }
       if (motion()) {
         if (S.game === "puzzle" && action.a !== undefined) {
           const a = view.querySelector(`[data-cell="${action.a}"]`),
@@ -1134,27 +1123,8 @@
           }
         }
       }
-      if (result.state.won || result.state.lost) {
-        await refreshProgress().catch(()=>{});
-        showResult(result);
-        if (S.game === "tree" && !result.state.won) {
-          $("#overlay .result p").textContent =
-            "Игрушки не совпали с образцом. Следующая попытка — с новым расположением.";
-          $("#result-next").textContent = "Заново: новый образец";
-        }
-      }
-    } catch (e) {
-      toast(e.message);
-      if (S.session?.id === id) {
-        try {
-          S.session = await api("/api/games/session/" + id);
-          drawGame();
-          if (S.session.state.won || S.session.state.lost) {
-            await refreshProgress();
-            showResult(S.session);
-          }
-        } catch {}
-      }
+      if (result.state.won || result.state.lost) { toast("Результат сохраняется…"); activeSync.flush(); }
+    } catch (e) { toast(e.message);
     } finally {
       S.busy = false;
     }
@@ -1284,12 +1254,22 @@
     "change",
     snow,
   );
+  window.addEventListener("online",()=>syncSessions.forEach(s=>s.flush()));
   document.addEventListener("visibilitychange", () => {
+    if(document.hidden)syncSessions.forEach(s=>s.flush());
     if (!document.hidden) {
       gsapIf(() => gsap.globalTimeline.resume());
       if (!S.busy && S.session?.state.game === "tree") drawGame();
     }
   });
+  function syncOptions(){return {api,owner:String(S.me.user.id||S.me.user.telegram_id||S.me.user.username),onStatus:message=>{let el=$("#sync-status");if(!message){el?.remove();return}if(!el){el=document.createElement("div");el.id="sync-status";el.className="sync-status";document.body.append(el)}el.textContent=message;},onSaved:(result,session)=>{
+    if(result.balance!==undefined)S.me.user.snowflakes=result.balance;
+    if(session.id===S.session?.id&&!session.pending.length&&!session.resultShown&&(session.runtime.won||session.runtime.lost)){
+      if(S.busy){setTimeout(()=>syncOptions().onSaved(result,session),60);return}session.resultShown=true;
+      const current={...result,state:session.view()};refreshProgress().catch(()=>{});showResult(current);
+      if(S.game==="tree"&&!current.state.won){$("#overlay .result p").textContent="Игрушки не совпали с образцом. Следующая попытка — с новым расположением.";$("#result-next").textContent="Заново: новый образец";}
+    }
+  }}}
   async function refreshProgress() {
     S.progress = await api("/api/games/progress");
   }
@@ -1337,6 +1317,7 @@
       }
       const progress = await progressRequest;
       if (progress) S.progress = progress;
+      for(const session of ArcadeSync.restore(syncOptions()))syncSessions.set(session.id,session);
       home();
       animateIn();
       snow();
