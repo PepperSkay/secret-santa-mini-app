@@ -59,6 +59,7 @@
       desc: "36 фрагментов без номеров, новая зимняя картина на каждом уровне. Коснись двух фрагментов или перетащи один на другой. Собери картинку за ограниченное число ходов.",
     },
     ...window.WinterExtras.games,
+    ...window.WinterHoliday.games,
   ];
   const levelGames = games.filter((game) => !game.endless);
   let S = {
@@ -151,7 +152,9 @@
     api(path, { method: "POST", body: JSON.stringify(body) });
   function animateIn() {
     const avatar = $(".avatar");
-    if (avatar && S.avatar === "⛄") {
+    if (avatar && S.me?.avatar) { avatar.classList.remove("photo-avatar"); const photo=document.createElement("img"); photo.className="avatar-photo"; photo.src=S.me.avatar; photo.alt="Твой аватар"; avatar.firstChild?.remove(); avatar.prepend(photo); }
+    const mini=$(".avatar-mini"); if(mini && S.me?.avatar){mini.innerHTML='<img class="avatar-photo" alt="Аватар">';mini.firstChild.src=S.me.avatar;}
+    if (avatar && !S.me?.avatar && S.avatar === "⛄") {
       avatar.classList.add("photo-avatar");
       if (avatar.firstChild.nodeType === 3) avatar.firstChild.textContent = "";
     }
@@ -171,8 +174,8 @@
   }
   function snow() {
     const el = $("#snowfall");
+    gsapIf(() => gsap.killTweensOf([...el.children]));
     el.innerHTML = "";
-    gsapIf(() => gsap.killTweensOf(".snow-dot"));
     if (!S.snow || !motion()) return;
     for (let i = 0; i < 14; i++) {
       const d = document.createElement("i");
@@ -288,7 +291,7 @@
   function gameCard(g) {
     const done = S.progress.levels.filter((l) => l.game === g.id).length;
     const record = S.progress.records?.[g.id] || 0;
-    return `<button class="game-card" data-game="${g.id}" aria-label="${esc(g.name)}"><span class="game-art ${g.id}"><span class="badge">${g.endless ? "∞ РЕКОРД" : "❄ 3–8"}</span></span><strong>${g.name}</strong><small>${g.endless ? `Рекорд: ${fmt(record)}` : `${done}/10 уровней`}</small></button>`;
+    return `<button class="game-card" data-game="${g.id}" aria-label="${esc(g.name)}"><span class="game-art ${g.id} ${g.holiday ? "holiday-art" : ""}">${g.holiday ? g.icon : ""}<span class="badge">${g.endless ? "∞ РЕКОРД" : "❄ 3–8"}</span></span><strong>${g.name}</strong><small>${g.endless ? `Рекорд: ${fmt(record)}` : `${done}/10 уровней`}</small></button>`;
   }
   function head(text, tab) {
     return `<div class="section-head"><h2>${text}</h2>${tab ? `<button data-tab="${tab}" aria-label="Показать всё">›</button>` : ""}</div>`;
@@ -391,16 +394,9 @@
       )}${S.me.is_admin ? '<button class="menu-row" id="admin-open">⚙ <span>Админ-панель</span><span class="chevron">›</span></button>' : ""}</section>`;
     $("#avatar-edit").onclick = avatarSheet;
     $("#account").onclick = accountSheet;
-    $("#admin-open")?.addEventListener("click", () => {
-      sheet(
-        '<h2>Админ-панель</h2><p>Действующая панель сохранена. В отдельном превью действия с реальными пользователями отключены.</p><button class="secondary wide" id="legacy-admin">Посмотреть разделы панели</button>',
-      );
-      $("#legacy-admin").onclick = () =>
-        sheet(
-          '<h2>Панель администратора</h2><p>Участники · поиск · активные · снежинки · траты Stars · рефералы · сообщения · блокировка · каталог · цены · тексты · стикеры · поддержка · рассылки · распределение · аудит.</p><p class="notice">Эти разделы остаются в действующей панели. Их подключение к новому оформлению выполняется при переносе превью.</p>',
-        );
-    });
+    $("#admin-open")?.addEventListener("click", () => { S.tab="admin"; header("Админ-панель"); WinterAdmin.open({view,api,post,toast,sheet,closeSheet,esc}); });
   }
+
   function favorites() {
     header("Избранные игры");
     view.innerHTML = `<div class="games-grid large">${games
@@ -416,14 +412,17 @@
         ["⛄", "🎅", "🦊", "🐻‍❄️", "🐧", "🦌"]
           .map((a) => `<button data-avatar="${a}">${a}</button>`)
           .join("") +
-        "</div>",
+        '</div><label class="primary wide" style="display:block;text-align:center;margin-top:18px">Фото из галереи<input id="avatar-upload" type="file" accept="image/*" hidden></label><p class="notice">Фото будет сохранено в твоём профиле.</p>',
     );
+    $("#avatar-upload").onchange=async e=>{const file=e.target.files?.[0];if(!file)return;try{toast("Готовим фотографию…");const image=new Image();const url=URL.createObjectURL(file);try{image.src=url;await image.decode();const canvas=document.createElement("canvas");canvas.width=canvas.height=320;const size=Math.min(image.naturalWidth,image.naturalHeight);canvas.getContext("2d").drawImage(image,(image.naturalWidth-size)/2,(image.naturalHeight-size)/2,size,size,0,0,320,320);let photo=canvas.toDataURL("image/jpeg",.8);if(photo.length>175000)photo=canvas.toDataURL("image/jpeg",.5);const result=await api("/api/avatar",{method:"PUT",body:JSON.stringify({avatar:photo})});S.me.avatar=result.avatar;closeSheet();profile();animateIn();}finally{URL.revokeObjectURL(url)}}catch(x){toast(x.message||"Не удалось открыть фото. Выбери JPEG или PNG.")}};
     $("#overlay")
       .querySelectorAll("[data-avatar]")
       .forEach(
         (b) =>
-          (b.onclick = () => {
+          (b.onclick = async () => {
+            try { await api('/api/avatar',{method:'PUT',body:JSON.stringify({avatar:null})}); } catch(e) { toast(e.message); return; }
             S.avatar = b.dataset.avatar;
+            S.me.avatar = null;
             save("santa.avatar", S.avatar);
             closeSheet();
             profile();
@@ -599,7 +598,7 @@
     const g = games.find((g) => g.id === game);
     if (g.endless) {
       const record = S.progress.records?.[game] || 0;
-      view.innerHTML = `<section class="level-hero"><span class="game-art ${game}"></span><div><h1>${g.name}</h1><p>Бесконечная игра · ${g.genre}</p></div><button class="icon-button" id="favorite" aria-label="В избранное">${S.favorites.includes(game) ? "💜" : "♡"}</button></section><p class="game-instructions">${g.desc}</p><section class="panel"><div class="row"><div><small>Твой максимальный рекорд</small><h2>${fmt(record)} очков</h2></div><span style="font-size:34px">🏆</span></div><p class="notice">Уровней нет: играй сколько сможешь. Новый рекорд сохраняется после каждого удачного хода, даже если закрыть игру.</p><button class="primary wide" id="start-record">Начать игру</button></section><button class="secondary wide" data-tab="games">Все игры</button>`;
+      view.innerHTML = `<section class="level-hero"><span class="game-art ${game} ${g.holiday ? "holiday-art" : ""}">${g.holiday ? g.icon : ""}</span><div><h1>${g.name}</h1><p>Бесконечная игра · ${g.genre}</p></div><button class="icon-button" id="favorite" aria-label="В избранное">${S.favorites.includes(game) ? "💜" : "♡"}</button></section><p class="game-instructions">${g.desc}</p><section class="panel"><div class="row"><div><small>Твой максимальный рекорд</small><h2>${fmt(record)} очков</h2></div><span style="font-size:34px">🏆</span></div><p class="notice">Уровней нет: играй сколько сможешь. Новый рекорд сохраняется после каждого удачного хода, даже если закрыть игру.</p><button class="primary wide" id="start-record">Начать игру</button></section><button class="secondary wide" data-tab="games">Все игры</button>`;
       $("#start-record").onclick = () => startGame(game, 0);
       $("#favorite").onclick = () => {
         S.favorites = S.favorites.includes(game)
@@ -614,7 +613,7 @@
     const passed = new Set(
       S.progress.levels.filter((x) => x.game === game).map((x) => x.level),
     );
-    view.innerHTML = `<section class="level-hero"><span class="game-art ${game}"></span><div><h1>${g.name}</h1><p>10 уровней · ${g.genre}</p></div><button class="icon-button" id="favorite" aria-label="В избранное">${S.favorites.includes(game) ? "💜" : "♡"}</button></section><p class="game-instructions">${g.desc}</p><div class="levels">${Array.from(
+    view.innerHTML = `<section class="level-hero"><span class="game-art ${game} ${g.holiday ? "holiday-art" : ""}">${g.holiday ? g.icon : ""}</span><div><h1>${g.name}</h1><p>10 уровней · ${g.genre}</p></div><button class="icon-button" id="favorite" aria-label="В избранное">${S.favorites.includes(game) ? "💜" : "♡"}</button></section><p class="game-instructions">${g.desc}</p><div class="levels">${Array.from(
       { length: 10 },
       (_, i) => {
         const l = i + 1,
@@ -930,7 +929,7 @@
     return `background-image:url('assets/puzzle-atlas.webp');background-size:${side * 100}% ${side * 100}%;background-position:${(x / (side - 1)) * 100}% ${(y / (side - 1)) * 100}%`;
   }
   function drawGame() {
-    if (!window.WinterExtras.games.some((g) => g.id === S.game)) {
+    if (![...window.WinterExtras.games,...window.WinterHoliday.games].some((g) => g.id === S.game)) {
       legacyDrawGame();
       return;
     }
@@ -940,8 +939,8 @@
     const recordMode = Boolean(s.record_mode);
     const best = Math.max(S.progress.records?.[s.game] || 0, S.session.record || 0, s.score || 0);
     const thirdLabel = s.game === "blocks" ? "Линии" : "Макс. плитка";
-    const thirdValue = s.game === "blocks" ? s.lines : Math.max(...s.board);
-    view.innerHTML = `<div class="backline"><button id="exit-game" aria-label="Назад">${icon("back")}</button><h2>${g.name}</h2><span class="pill" style="margin-left:auto">${recordMode ? "∞ рекорд" : `${s.level}/10`}</span></div><div class="game-header"><div class="game-meter"><small>Очки</small><strong>${fmt(s.score)}</strong></div><div class="game-meter"><small>${recordMode ? "Рекорд" : "Ходы"}</small><strong>${recordMode ? fmt(best) : s.moves}</strong></div><div class="game-meter"><small>${recordMode ? thirdLabel : "Награда"}</small><strong>${recordMode ? fmt(thirdValue) : `❄ ${s.reward}`}</strong></div></div>${recordMode ? "" : `<div class="progress"><span style="width:${Math.min(100, WinterExtras.progress(s))}%"></span></div>`}<div id="play-board"></div><div id="game-status" class="game-status"></div><div class="game-tools"><button class="secondary" id="game-help">Правила</button><button class="secondary" id="restart">Заново</button></div>`;
+    const thirdValue = !recordMode ? 0 : s.game === "blocks" ? s.lines : Math.max(...s.board);
+    view.innerHTML = `<div class="backline"><button id="exit-game" aria-label="Назад">${icon("back")}</button><h2>${g.name}</h2><span class="pill" style="margin-left:auto">${recordMode ? "∞ рекорд" : `${s.level}/10`}</span></div><div class="game-header"><div class="game-meter"><small>Очки</small><strong>${fmt(s.score)}</strong></div><div class="game-meter"><small>${recordMode ? "Рекорд" : "Ходы"}</small><strong>${recordMode ? fmt(best) : s.moves}</strong></div><div class="game-meter"><small>${recordMode ? thirdLabel : "Награда"}</small><strong>${recordMode ? fmt(thirdValue) : `❄ ${s.reward}`}</strong></div></div>${recordMode ? "" : `<div class="progress"><span style="width:${Math.min(100, g.holiday ? 0 : WinterExtras.progress(s))}%"></span></div>`}<div id="play-board"></div><div id="game-status" class="game-status"></div><div class="game-tools"><button class="secondary" id="game-help">Правила</button><button class="secondary" id="restart">Заново</button></div>`;
     $("#exit-game").onclick = () => {
       if (!S.busy) openLevels(S.game);
     };
@@ -951,7 +950,7 @@
     };
     const id = S.session.id,
       epoch = gameEpoch;
-    WinterExtras.render({
+    (g.holiday ? WinterHoliday : WinterExtras).render({
       board: $("#play-board"),
       state: s,
       send: sendMove,
@@ -960,7 +959,9 @@
       refresh: async () => {
         if (S.busy || S.session?.id !== id || epoch !== gameEpoch) return;
         try {
-          S.session = await api("/api/games/session/" + id);
+          const fresh = await api("/api/games/session/" + id);
+          if (S.busy || S.session?.id !== id || epoch !== gameEpoch || fresh.version < S.session.version) return;
+          S.session = fresh;
           drawGame();
         } catch (e) {
           toast(e.message);
@@ -1107,6 +1108,7 @@
         );
       if (S.game === "blocks" && result.state.cleared?.length)
         await animateBlockClear(result.state.cleared);
+      if(result.state.record_mode){S.progress.records ||= {};const before=S.progress.records[S.game]||0;S.progress.records[S.game]=Math.max(before,result.record||0);S.progress.score+=S.progress.records[S.game]-before;}
       S.session = result;
       S.selected = null;
       if (result.balance !== undefined) S.me.user.snowflakes = result.balance;
@@ -1133,7 +1135,7 @@
         }
       }
       if (result.state.won || result.state.lost) {
-        await refreshProgress();
+        await refreshProgress().catch(()=>{});
         showResult(result);
         if (S.game === "tree" && !result.state.won) {
           $("#overlay .result p").textContent =
@@ -1283,10 +1285,9 @@
     snow,
   );
   document.addEventListener("visibilitychange", () => {
-    if (document.hidden) gsapIf(() => gsap.globalTimeline.pause());
-    else {
+    if (!document.hidden) {
       gsapIf(() => gsap.globalTimeline.resume());
-      if (S.session?.state.game === "tree") drawGame();
+      if (!S.busy && S.session?.state.game === "tree") drawGame();
     }
   });
   async function refreshProgress() {
