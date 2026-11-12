@@ -1,0 +1,389 @@
+.new-games {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.game-art.blocks,
+.game-art.merge2048,
+.game-art.sort,
+.game-art.mines,
+.game-art.memory {
+  background-image: url("extra-covers.webp");
+  background-size: 300% 200%;
+}
+.game-art.blocks {
+  background-position: 0 0;
+}
+.game-art.merge2048 {
+  background-position: 50% 0;
+}
+.game-art.sort {
+  background-position: 100% 0;
+}
+.game-art.mines {
+  background-position: 0 100%;
+}
+.game-art.memory {
+  background-position: 50% 100%;
+}
+.puzzle {
+  gap: 2px;
+  padding: 6px;
+  overflow: hidden;
+}
+.puzzle .cell {
+  border-radius: 2px;
+  border: 0;
+  box-shadow: inset 0 0 0 1px #120b3344;
+}
+.puzzle .cell.selected {
+  outline: 2px solid #efd1ff;
+  z-index: 2;
+}
+.puzzle-sample {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 16px;
+  background-repeat: no-repeat;
+}
+.extra-board {
+  gap: 5px;
+}
+.extra-board.blocks {
+  gap: 4px;
+  padding: 9px;
+}
+.block-cell,
+.mine-cell {
+  aspect-ratio: 1;
+  min-height: 0;
+  padding: 0;
+  background: #221b36;
+  border: 1px solid #c4a1f333;
+  border-radius: 5px;
+  box-shadow: inset 0 2px 5px #0004;
+}
+.block-cell.filled,
+.mini-shape i {
+  border: 1px solid #ddd4ff5c;
+  box-shadow:
+    inset 0 2px 3px #fff5,
+    inset 0 -3px 4px #0003;
+}
+.block-cell.clearing {
+  position: relative;
+  z-index: 4;
+  will-change: transform, opacity, filter;
+  box-shadow:
+    0 0 18px #d7b2ff,
+    inset 0 0 8px #fff !important;
+}
+.color-1 {
+  background: linear-gradient(135deg, #79c9f7, #486cd8) !important;
+}
+.color-2 {
+  background: linear-gradient(135deg, #f4ba69, #c86b2d) !important;
+}
+.color-3 {
+  background: linear-gradient(135deg, #b69bff, #7550cf) !important;
+}
+.block-tray {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 9px;
+  margin: 18px 0 5px;
+  touch-action: none;
+}
+.tray-piece {
+  min-height: 91px;
+  display: grid;
+  place-items: center;
+  background: #2d2146;
+  border: 1px solid #c9a9ee2a;
+  border-radius: 15px;
+  padding: 9px;
+  touch-action: none;
+  user-select: none;
+}
+.tray-piece.selected {
+  border-color: #d8adff;
+  box-shadow: 0 0 10px #b56bea38;
+}
+.mini-shape {
+  position: relative;
+  display: inline-block;
+  pointer-events: none;
+}
+.mini-shape i {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 17px;
+  height: 17px;
+  border-radius: 3px;
+}
+.block-ghost {
+  position: fixed;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  z-index: 80;
+  opacity: 0.9;
+  filter: drop-shadow(0 5px 8px #0008);
+}
+.block-ghost .mini-shape {
+  transform: scale(1.6);
+  transform-origin: 0 0;
+}
+.merge-tile {
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  background: #20172f;
+  border: 1px solid #e3d0ff25;
+  border-radius: 14px;
+  font-size: clamp(22px, 7vw, 35px);
+  font-weight: 800;
+  color: #fff;
+  text-shadow: 0 2px 3px #0004;
+  box-shadow: inset 0 1px 5px #fff1;
+}
+.merge-tile.v-1 {
+  background: #65578a;
+}
+.merge-tile.v-2 {
+  background: #73569d;
+}
+.merge-tile.v-3 {
+  background: #7761b4;
+}
+.merge-tile.v-4 {
+  background: #546bc0;
+}
+.merge-tile.v-5 {
+  background: #3b8dab;
+}
+.merge-tile.v-6 {
+  background: #419a91;
+}
+.merge-tile.v-7 {
+  background: #bc8e42;
+}
+.merge-tile.v-8 {
+  background: #c07646;
+}
+.merge-tile.v-9 {
+  background: #ca5672;
+}
+.merge-tile.v-10 {
+  background: #b7449b;
+  font-size: 26px;
+}
+.merge-tile.v-11 {
+  background: linear-gradient(140deg, #d3a853, #a647a4);
+  font-size: 26px;
+}
+.direction-controls {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 9px;
+  margin-top: 14px;
+}
+.direction-controls button {
+  font-size: 22px;
+}
+.sort-board {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  justify-items: center;
+  gap: 15px 8px;
+  padding: 15px 0;
+  touch-action: manipulation;
+}
+.tube {
+  padding: 0;
+  background: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  position: relative;
+}
+.tube-glass {
+  width: 52px;
+  height: 162px;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 3px;
+  align-items: center;
+  padding: 8px 3px;
+  border-radius: 5px 5px 24px 24px;
+  border: 2px solid #d9e5ff77;
+  border-top: 4px solid #dae7ffb5;
+  background: linear-gradient(90deg, #fff0, #b9c5ff22, #fff0);
+  box-shadow:
+    inset 3px 0 4px #e7e3ff22,
+    0 5px 10px #0003;
+  transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.tube.selected .tube-glass {
+  transform: translateY(-10px);
+  border-color: #e2bcff;
+  box-shadow: 0 0 17px #b77de466;
+}
+.sort-ball {
+  width: 31px;
+  height: 31px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 16px;
+  color: #fffc;
+  text-shadow: 0 1px 3px #0007;
+  box-shadow:
+    inset 2px 3px 5px #fff8,
+    inset -2px -3px 5px #0004;
+}
+.ball-0 {
+  background: #db547b;
+}
+.ball-1 {
+  background: #578bdf;
+}
+.ball-2 {
+  background: #45a18b;
+}
+.ball-3 {
+  background: #d3a445;
+}
+.ball-4 {
+  background: #a05ed4;
+}
+.ball-5 {
+  background: #d58044;
+}
+.mine-cell {
+  font-size: 19px;
+  font-weight: 750;
+  color: #a8c7fd;
+  background: linear-gradient(145deg, #51406c, #352849);
+  box-shadow:
+    inset 0 1px 2px #fff3,
+    0 2px 0 #130d23;
+}
+.mine-cell.opened {
+  background: #211b31;
+  box-shadow: none;
+  border-color: #a586b920;
+}
+.mine-cell[data-count="2"] {
+  color: #9dd6b5;
+}
+.mine-cell[data-count="3"] {
+  color: #f5a6ae;
+}
+.mine-cell[data-count="4"] {
+  color: #d2a0ff;
+}
+.mine-cell.trap {
+  background: #6b304c;
+}
+.memory-card {
+  aspect-ratio: 0.88;
+  min-height: 0;
+  background: linear-gradient(145deg, #6c429b, #382253);
+  border-radius: 12px;
+  border: 1px solid #d8b6fa66;
+  box-shadow:
+    inset 0 0 0 4px #c397ed22,
+    inset 0 1px 3px #fff4,
+    0 3px 0 #160d2b;
+  padding: 0;
+  font-size: clamp(22px, 7vw, 35px);
+  color: #c5a5e5;
+  overflow: hidden;
+  touch-action: manipulation;
+}
+.memory-card.face-up {
+  background: linear-gradient(145deg, #f0e5d8, #c7b6dc);
+  color: white;
+  animation: card-turn 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.memory-card.found {
+  opacity: 0.5;
+  box-shadow: inset 0 0 0 2px #9de3cb;
+}
+.memory-card:disabled {
+  opacity: 0.5;
+}
+.memory-card span {
+  display: block;
+  pointer-events: none;
+}
+.board.memory {
+  gap: 7px;
+}
+.board.memory:has(.memory-card:nth-child(21)) {
+  gap: 5px;
+}
+.board.memory:has(.memory-card:nth-child(21)) .memory-card {
+  font-size: 24px;
+}
+.game-header .game-meter {
+  min-width: 0;
+}
+.backline h2 {
+  min-width: 0;
+  font-size: clamp(15px, 4.8vw, 20px);
+}
+@keyframes card-turn {
+  from {
+    transform: rotateY(65deg);
+    opacity: 0.7;
+  }
+  to {
+    transform: rotateY(0);
+    opacity: 1;
+  }
+}
+@media (max-width: 360px) {
+  .new-games {
+    gap: 7px;
+  }
+  .new-games .game-card strong {
+    font-size: 11px;
+  }
+  .block-tray {
+    gap: 6px;
+  }
+  .tray-piece {
+    padding: 5px;
+  }
+  .tube-glass {
+    width: 46px;
+    height: 153px;
+  }
+  .sort-ball {
+    width: 29px;
+    height: 29px;
+  }
+  .board.blocks {
+    gap: 3px;
+    padding: 7px;
+  }
+  .merge-tile.v-10,
+  .merge-tile.v-11 {
+    font-size: 23px;
+  }
+  .mine-cell {
+    font-size: 16px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .memory-card.face-up {
+    animation: none;
+  }
+  .tube-glass {
+    transition: none;
+  }
+}
