@@ -1111,9 +1111,10 @@
   });
   function syncOptions(){return {api,owner:String(S.me.user.id||S.me.user.telegram_id||S.me.user.username),onStatus:message=>{let el=$("#sync-status");if(!message){el?.remove();return}if(!el){el=document.createElement("div");el.id="sync-status";el.className="sync-status";document.body.append(el)}el.textContent=message;},onSaved:(result,session)=>{
     if(result.balance!==undefined)S.me.user.snowflakes=result.balance;
+    if(!session.pending.length&&(session.runtime.won||session.runtime.lost)&&!session.progressRefreshed){session.progressRefreshed=true;refreshProgress().catch(()=>{session.progressRefreshed=false})}
     if(session.id===S.session?.id&&!session.pending.length&&!session.resultShown&&(session.runtime.won||session.runtime.lost)){
       if(S.busy||moveAnimating||queuedMoves.length){setTimeout(()=>syncOptions().onSaved(result,session),60);return}session.resultShown=true;
-      const current={...result,state:session.view()};refreshProgress().catch(()=>{});showResult(current);
+      const current={...result,state:session.view()};showResult(current);
       if(S.game==="tree"&&!current.state.won){$("#overlay .result p").textContent="Игрушки не совпали с образцом. Следующая попытка — с новым расположением.";$("#result-next").textContent="Заново: новый образец";}
     }
   }}}
