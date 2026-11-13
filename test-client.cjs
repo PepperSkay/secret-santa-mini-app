@@ -13,6 +13,7 @@ const runtime={game:'merge2048',level:0,score:0,won:false,lost:false,steps:0,rew
  offline.step({direction:'left'});await offline.flush();assert.equal(offline.pending.length,1);await ArcadeSync.flushJournal();
  if(!process.argv.includes('--indexeddb'))assert.ok(JSON.parse(storage.get('santa.arcade.journal.v3')).offline);
  offline.step({direction:'down'});assert.equal(offline.runtime.turns,2);clearTimeout(offline.timer);offline.timer=null;offline.closed=true;await ArcadeSync.flushJournal();
+ if(process.argv.includes('--indexeddb')){const rows=await new Promise((resolve,reject)=>{const open=indexedDB.open('santa-arcade',1);open.onsuccess=()=>{const request=open.result.transaction('sessions').objectStore('sessions').getAll();request.onsuccess=()=>{resolve(request.result);open.result.close()};request.onerror=reject};open.onerror=reject});assert.equal(rows.find(j=>j.id==='offline').pending.length,2);assert.ok(!rows.some(j=>j.id==='test'),'Acknowledged journal removed from disk')}
  const recovered=await ArcadeSync.restore({owner:'fixture',api:async()=>{throw Error('offline')}});assert.equal(recovered[0].pending.length,2);for(const s of recovered){s.closed=true;clearTimeout(s.timer)}
  assert.equal((await ArcadeSync.restore({owner:'someone-else',api:async()=>{}})).length,0);
  const burst=new ArcadeSync.Session({id:'burst',runtime,version:0},{owner:'fixture',api:async()=>{throw Error('offline')}});const times=[];
