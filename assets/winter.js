@@ -79,14 +79,13 @@
     snow: loadStorage("santa.snow", true),
     reduce: loadStorage("santa.reduce", false),
   };
-  let chanceController=null;
   let activeSync=null; const syncSessions=new Map();
   let pageToken = 0,
     timer = null,
     toastTimer,
     gameEpoch = 0;
   let moveAnimating=false, queuedMoves=[];
-  const inputStats=window.__SANTA_DIAGNOSTICS__={build:"20261113-plinko2",samples:[]};
+  const inputStats=window.__SANTA_DIAGNOSTICS__={build:"20261113-placement1",samples:[]};
   document.documentElement.dataset.build=inputStats.build;
   function loadStorage(k, fallback) {
     try {
@@ -106,7 +105,6 @@
       games:
         "M7 7h10c3 0 5 11 2 12-2 1-4-4-7-4s-5 5-7 4C2 18 4 7 7 7ZM7 11v5m-2-2h4m7-2h.01m2 3h.01",
       cup: "M8 3h8v6a4 4 0 0 1-8 0V3Zm0 2H4v3c0 3 3 4 5 4m7-7h4v3c0 3-3 4-5 4m-3 1v6m-4 2h8",
-      plinko: "M12 2v3M6 9h.01M12 9h.01M18 9h.01M3 15h.01M9 15h.01M15 15h.01M21 15h.01M3 20h18",
       profile: "M20 21v-3a8 8 0 0 0-16 0v3M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0",
       snow: "M12 2v20M3.3 7l17.4 10M3.3 17 20.7 7M8 4l4 3 4-3M8 20l4-3 4 3",
       heart: "M20 5c-3-3-6 0-8 2-2-2-5-5-8-2-5 5 2 11 8 16 6-5 13-11 8-16Z",
@@ -224,7 +222,6 @@
         ["home", "Главная", "home"],
         ["games", "Все игры", "games"],
         ["rating", "Рейтинги", "cup"],
-        ["chance", "Азартные", "plinko"],
         ["profile", "Профиль", "profile"],
       ]
         .map(
@@ -234,7 +231,7 @@
         .join("");
   }
   function navTo(tab) {
-    const index = ["home", "games", "rating", "chance", "profile"].indexOf(tab);
+    const index = ["home", "games", "rating", "profile"].indexOf(tab);
     if (index < 0) return;
     nav.querySelectorAll("button").forEach((b) => {
       b.classList.toggle("active", b.dataset.tab === tab);
@@ -264,8 +261,8 @@
     clearTimeout(timer);
     gameEpoch++;moveAnimating=false;queuedMoves=[];disposeBoard();
     const token = ++pageToken;
-    const old = ["home", "games", "rating", "chance", "profile"].indexOf(S.tab),
-      next = ["home", "games", "rating", "chance", "profile"].indexOf(tab);
+    const old = ["home", "games", "rating", "profile"].indexOf(S.tab),
+      next = ["home", "games", "rating", "profile"].indexOf(tab);
     view.style.pointerEvents = "none";
     if (motion() && view.children.length)
       await gsap.to(view, {
@@ -285,7 +282,6 @@
     else if (tab === "games") allGames();
     else if (tab === "rating") await rating();
     else if (tab === "profile") profile();
-    else if (tab === "chance") plinkoPage();
     else if (tab === "favorites") favorites();
     else if (tab === "catalog") await catalog();
     else if (tab === "support") support();
@@ -294,12 +290,6 @@
     else if (tab === "snow") await snowHistory();
     else if (tab === "orders") await orders();
     if (token === pageToken) animateIn();
-  }
-  function plinkoPage(){
-    header("Азартные");scene.classList.add("play-scene");
-    chanceController=WinterPlinko.mount({view,api,esc,fmt,motion,owner:String(S.me.user.telegram_id||S.me.user.id),onBalance:balance=>{
-      S.me.user.snowflakes=balance;const pill=$("#topbar .pill");if(pill)pill.innerHTML=icon("snow")+fmt(balance);
-    }});
   }
   function gameCard(g) {
     const done = S.progress.levels.filter((l) => l.game === g.id).length;
@@ -331,7 +321,6 @@
       ["✦", "Новые", "games"],
       ["♥", "Для тебя", "favorites"],
       ["▦", "Все игры", "games"],
-      ["❄", "Азартные", "chance"],
     ]
       .map(
         ([i, t, p], n) =>
@@ -686,7 +675,7 @@
     }
     return points.slice(0, count)[i];
   }
-  function disposeBoard(){chanceController?.dispose();chanceController=null;const b=$("#play-board");b?._dispose?.();if(b)clearTimeout(b._peekTimer);}
+  function disposeBoard(){const b=$("#play-board");b?._dispose?.();if(b)clearTimeout(b._peekTimer);}
   function gameShell(s,g){
     let board=$("#play-board");
     if(board?.dataset.sessionId===S.session.id){updateGameMeters(s);return board}
