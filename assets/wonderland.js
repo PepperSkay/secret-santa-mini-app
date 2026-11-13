@@ -102,13 +102,13 @@
   }
   async function mutate(path,method='POST',body){
    if(busy||dead)return;busy=true;view.querySelectorAll('button:not([data-tab])').forEach(b=>b.disabled=true);
-   try{const result=await request(path,method,body);if(dead)return;await refresh();return result}
-   catch(e){if(!dead){status(e.message);toast(e.message)}throw e}
-   finally{busy=false;if(!dead){render()}}
+   try{const result=await request(path,method,body);if(dead)return;busy=false;await refresh();return result}
+   catch(e){if(!dead){busy=false;render();status(e.message);toast(e.message)}throw e}
+   finally{busy=false}
   }
   async function sendPending(){
    if(!pending||busy)return;const saved=pending;
-   try{const result=await mutate(saved.kind==='start'?'/api/workshop/start':'/api/workshop/decorations','POST',saved.body);if(dead)return;if(result){savePending(null);if(saved.kind==='start'){slots.fill(null);material=null}await refresh();toast(saved.kind==='start'?'Эльфы начали творить волшебство!':'Игрушка нашла своё место ✨');if(motion())animate(saved.kind==='start'?'.wl-job':'.wl-decoration')}}
+   try{const result=await mutate(saved.kind==='start'?'/api/workshop/start':'/api/workshop/decorations','POST',saved.body);if(dead)return;if(result){savePending(null);if(saved.kind==='start'){slots.fill(null);material=null}render();toast(saved.kind==='start'?'Эльфы начали творить волшебство!':'Игрушка нашла своё место ✨');if(motion())animate(saved.kind==='start'?'.wl-job':'.wl-decoration')}}
    catch(e){if([400,403,404,409].includes(e.status)){savePending(null);if(!dead)render()}else if(!dead)status('Нет подтверждения. Нажми «Проверить результат» — повторного списания не будет.')}
   }
   async function click(e){
