@@ -79,13 +79,14 @@
     snow: loadStorage("santa.snow", true),
     reduce: loadStorage("santa.reduce", false),
   };
+  let wonderlandController=null, pendingWonderlandTab=null, visitingHomeCode=null;
   let activeSync=null; const syncSessions=new Map();
   let pageToken = 0,
     timer = null,
     toastTimer,
     gameEpoch = 0;
   let moveAnimating=false, queuedMoves=[];
-  const inputStats=window.__SANTA_DIAGNOSTICS__={build:"20261113-placement1",samples:[]};
+  const inputStats=window.__SANTA_DIAGNOSTICS__={build:"20261113-workshop1",samples:[]};
   document.documentElement.dataset.build=inputStats.build;
   function loadStorage(k, fallback) {
     try {
@@ -102,6 +103,8 @@
   function icon(name) {
     const p = {
       home: "M3 11 12 3l9 8v10h-6v-6H9v6H3Z",
+      craft: "M3 7h18v14H3ZM2 3h20v5H2Zm10 0v18M12 3C7-4 2 4 12 5c10-1 5-9 0-2Z",
+      tree: "m12 2 5 6h-3l6 6h-4l6 6H2l6-6H4l6-6H7Zm0 18v3",
       games:
         "M7 7h10c3 0 5 11 2 12-2 1-4-4-7-4s-5 5-7 4C2 18 4 7 7 7ZM7 11v5m-2-2h4m7-2h.01m2 3h.01",
       cup: "M8 3h8v6a4 4 0 0 1-8 0V3Zm0 2H4v3c0 3 3 4 5 4m7-7h4v3c0 3-3 4-5 4m-3 1v6m-4 2h8",
@@ -208,7 +211,7 @@
       "scene " +
       (type === "home" ? "" : type === "profile" ? "profile-scene" : "compact");
     $("#topbar").innerHTML =
-      `${S.tab === "home" ? '<span class="wordmark">Тайный Санта 🎅</span>' : `<button class="icon-button" data-tab="home" aria-label="На главную">${icon("back")}</button>`}<div class="controls"><span class="pill">${icon("snow")}${fmt(S.me?.user?.snowflakes)}</span>${type === "profile" ? `<button class="icon-button" id="settings" aria-label="Настройки">${icon("gear")}</button>` : `<button class="avatar-mini" data-tab="profile" aria-label="Профиль">${esc(S.avatar)}</button>`}</div>`;
+      `${S.tab === "home" ? '<span class="wordmark">Новогодняя сказка</span>' : `<button class="icon-button" data-tab="home" aria-label="На главную">${icon("back")}</button>`}<div class="controls"><span class="pill">${icon("snow")}${fmt(S.me?.user?.snowflakes)}</span>${type === "profile" ? `<button class="icon-button" id="settings" aria-label="Настройки">${icon("gear")}</button>` : `<button class="avatar-mini" data-tab="profile" aria-label="Профиль">${esc(S.avatar)}</button>`}</div>`;
     $("#settings")?.addEventListener("click", settingsSheet);
     $("#scene-title").innerHTML =
       type === "profile"
@@ -221,7 +224,8 @@
       [
         ["home", "Главная", "home"],
         ["games", "Все игры", "games"],
-        ["rating", "Рейтинги", "cup"],
+        ["craft", "Мастерская", "craft"],
+        ["tree", "Ёлка", "tree"],
         ["profile", "Профиль", "profile"],
       ]
         .map(
@@ -231,7 +235,8 @@
         .join("");
   }
   function navTo(tab) {
-    const index = ["home", "games", "rating", "profile"].indexOf(tab);
+    tab = tab === "cabin" ? "home" : tab === "rating" ? "games" : tab;
+    const index = ["home", "games", "craft", "tree", "profile"].indexOf(tab);
     if (index < 0) return;
     nav.querySelectorAll("button").forEach((b) => {
       b.classList.toggle("active", b.dataset.tab === tab);
@@ -252,6 +257,7 @@
     } else $("#nav-glow").style.transform = `translateX(${index * 100}%)`;
   }
   async function navigate(tab) {
+    if (["craft","tree","cabin"].includes(tab) && !S.me?.user?.exists) {pendingWonderlandTab=tab;return toast("Секунду, профиль загружается")}
     if (S.me?.user.active === false) {
       registration();
       return;
@@ -261,8 +267,8 @@
     clearTimeout(timer);
     gameEpoch++;moveAnimating=false;queuedMoves=[];disposeBoard();
     const token = ++pageToken;
-    const old = ["home", "games", "rating", "profile"].indexOf(S.tab),
-      next = ["home", "games", "rating", "profile"].indexOf(tab);
+    const old = ["home", "games", "craft", "tree", "profile"].indexOf(S.tab),
+      next = ["home", "games", "craft", "tree", "profile"].indexOf(tab);
     view.style.pointerEvents = "none";
     if (motion() && view.children.length)
       await gsap.to(view, {
@@ -280,6 +286,7 @@
     window.scrollTo({ top: 0, behavior: "instant" });
     if (tab === "home") home();
     else if (tab === "games") allGames();
+    else if (["craft","tree","cabin"].includes(tab)) wonderlandPage(tab);
     else if (tab === "rating") await rating();
     else if (tab === "profile") profile();
     else if (tab === "favorites") favorites();
@@ -290,6 +297,12 @@
     else if (tab === "snow") await snowHistory();
     else if (tab === "orders") await orders();
     if (token === pageToken) animateIn();
+  }
+  function wonderlandPage(tab) {
+    header(tab === "craft" ? "Мастерская" : tab === "tree" ? "Новогодняя ёлка" : "Мой домик");
+    scene.classList.add("play-scene");
+    const homeCode=visitingHomeCode;visitingHomeCode=null;
+    wonderlandController=WinterWonderland.mount({view,api,esc,fmt,toast,sheet,closeSheet,tg,owner:String(S.me.user.id),motion:()=>motion()&&S.snow,mode:tab === "cabin" ? "cabin" : tab,visitor:tab === "cabin"&&/^[A-Za-z0-9_-]{10,32}$/.test(homeCode)?homeCode:null});
   }
   function gameCard(g) {
     const done = S.progress.levels.filter((l) => l.game === g.id).length;
@@ -315,7 +328,7 @@
   function home() {
     header("", "home");
     const latest = S.progress.levels.at(-1);
-    view.innerHTML = `<div class="categories">${[
+    view.innerHTML = `<button class="wl-home-entry" data-tab="cabin"><img src="assets/workshop/room-cranberry.svg" alt="Уютный новогодний домик" width="900" height="720"><div><small>ТВОЁ МЕСТО В СКАЗКЕ</small><h2>Там, где<br>живёт чудо</h2><p>Зажги камин, укрась домик и пригласи друзей.</p><strong>Открыть мой домик →</strong></div></button><div class="wl-world-links"><button data-tab="craft">🎀 Мастерская<small>30 подарков. Шесть уровней волшебства.</small></button><button data-tab="tree">🎄 Новогодняя ёлка<small>Создай подарок и найди ему место.</small></button></div><button class="secondary wide" data-tab="rating">🏆 Общий рейтинг игроков</button><div class="categories">${[
       ["❄", "Новогодние", "games"],
       ["🔥", "Популярные", "games"],
       ["✦", "Новые", "games"],
@@ -380,6 +393,10 @@
       xp = S.progress.score % 3000;
     view.innerHTML = `<section class="profile-head"><div class="avatar">${esc(S.avatar)}<button class="avatar-edit" id="avatar-edit" aria-label="Изменить аватар">✎</button></div><h1>${esc(u.alias)}</h1><p>Уровень ${level}</p></section><div class="profile-xp"><div class="progress"><span style="width:${(xp / 3000) * 100}%"></span></div><div class="progress-text"><span>${fmt(S.progress.score)} очков</span><span>${fmt(xp)} / 3 000</span></div></div><div class="stat-grid"><div class="stat">${icon("games")}<strong>${S.progress.wins}</strong><small>Уровней пройдено</small></div><div class="stat">${icon("cup")}<strong>${fmt(S.progress.score)}</strong><small>Общий рейтинг</small></div><div class="stat">${icon("snow")}<strong>${fmt(u.snowflakes)}</strong><small>Снежинки</small></div></div><button class="panel gift-banner wide" data-tab="wishlist"><h2>🎁 Мой Тайный Санта</h2><p>${S.me.assignment ? "Получатель уже ждёт твой подарок" : "Вишлист готов. Ждём распределения!"}</p></button><section class="panel menu-list">${[
       ["account", "profile", "Моя анкета и ИНН"],
+      ["cabin", "home", "Мой новогодний домик"],
+      ["craft", "craft", "Мастерская и мои игрушки"],
+      ["tree", "tree", "Новогодняя ёлка"],
+      ["rating", "cup", "Рейтинг игроков"],
       ["wishlist", "list", "Мой вишлист"],
       ["snow", "snow", "История снежинок"],
       ["favorites", "heart", "Избранные игры"],
@@ -675,7 +692,7 @@
     }
     return points.slice(0, count)[i];
   }
-  function disposeBoard(){const b=$("#play-board");b?._dispose?.();if(b)clearTimeout(b._peekTimer);}
+  function disposeBoard(){wonderlandController?.dispose();wonderlandController=null;const b=$("#play-board");b?._dispose?.();if(b)clearTimeout(b._peekTimer);}
   function gameShell(s,g){
     let board=$("#play-board");
     if(board?.dataset.sessionId===S.session.id){updateGameMeters(s);return board}
@@ -1111,6 +1128,7 @@
   });
   function syncOptions(){return {api,owner:String(S.me.user.id||S.me.user.telegram_id||S.me.user.username),onStatus:message=>{let el=$("#sync-status");if(!message){el?.remove();return}if(!el){el=document.createElement("div");el.id="sync-status";el.className="sync-status";document.body.append(el)}el.textContent=message;},onSaved:(result,session)=>{
     if(result.balance!==undefined)S.me.user.snowflakes=result.balance;
+    if(result.material_drops?.length&&session.materialsVersion!==result.version){session.materialsVersion=result.version;toast("В мастерскую: +"+result.material_drops.reduce((n,d)=>n+d.quantity,0)+" материалов ✦")}
     if(!session.pending.length&&(session.runtime.won||session.runtime.lost)&&!session.progressRefreshed){session.progressRefreshed=true;refreshProgress().catch(()=>{session.progressRefreshed=false})}
     if(session.id===S.session?.id&&!session.pending.length&&!session.resultShown&&(session.runtime.won||session.runtime.lost)){
       if(S.busy||moveAnimating||queuedMoves.length){setTimeout(()=>syncOptions().onSaved(result,session),60);return}session.resultShown=true;
@@ -1168,6 +1186,9 @@
       ArcadeSync.restore(syncOptions()).then(sessions=>{for(const session of sessions)syncSessions.set(session.id,session)}).catch(()=>{});
       // A player may already have opened a game while profile/progress loaded.
       if(S.tab==="home"){home();animateIn()}
+      const homeCode=new URLSearchParams(location.search).get("home") || (tg?.initDataUnsafe?.start_param || "").replace(/^home_/, "");
+      if(pendingWonderlandTab){const destination=pendingWonderlandTab;pendingWonderlandTab=null;await navigate(destination)}
+      else if(S.tab==="home"&&/^[A-Za-z0-9_-]{10,32}$/.test(homeCode)){visitingHomeCode=homeCode;await navigate("cabin")}
       snow();
     } catch (e) {
       view.innerHTML = `<section class="panel"><h2>Не удалось открыть игры</h2><p style="margin:12px 0">${esc(e.message)}</p><button class="primary wide" id="retry">Повторить</button></section>`;
