@@ -22,6 +22,6 @@ Materials retain six rarity levels (108 combinations). Old inventory and running
 
 The cabin UI and API have been removed. Opening the workshop returns any archived cabin decorations to the owner's inventory once, under the existing transaction lock. No user records or craft jobs are deleted.
 
-The tree uses 63 branch anchors, with server-side snapping. Hover/touch preview, hanging cord, foreground needle occlusion, a short settling swing and local shadow ground each tiny ornament in the scene. Decorations remain unlimited and paginated. Snow twinkles and all motion respect the existing motion preferences. The original navigation timing is retained, with generated icons.
+The tree uses 63 branch anchors, with server-side snapping. Hover/touch preview, hanging cord, foreground needle occlusion, a short settling swing and local shadow ground each tiny ornament in the scene. Decorations remain unlimited and paginated. Snow twinkles and all motion respect the existing motion preferences. The original navigation timing is retained in a compact 74px bar with consistent outline icons. Shared safe-area offsets keep content and floating controls above the navigation.
 
 Tests: `npm test`; backend: `python -m unittest test_workshop test_web_update -q`. Fixtures are isolated from production.

@@ -86,7 +86,7 @@
     toastTimer,
     gameEpoch = 0;
   let moveAnimating=false, queuedMoves=[];
-  const inputStats=window.__SANTA_DIAGNOSTICS__={build:"20261113-christmas2",samples:[]};
+  const inputStats=window.__SANTA_DIAGNOSTICS__={build:"20261113-nav3",samples:[]};
   document.documentElement.dataset.build=inputStats.build;
   function loadStorage(k, fallback) {
     try {
@@ -230,7 +230,7 @@
       ]
         .map(
           ([id, title, i]) =>
-            `<button data-tab="${id}" aria-label="${title}"><img class="festive-nav-icon" src="assets/workshop/nav_${id==='home'?'home':id==='games'?'games':id==='craft'?'craft':id==='tree'?'tree':'profile'}.webp" alt="" width="44" height="44">${icon(i)}<span>${title}</span></button>`,
+            `<button data-tab="${id}" aria-label="${title}">${icon(i)}<span>${title}</span></button>`,
         )
         .join("");
   }
@@ -250,7 +250,7 @@
         overwrite: true,
       });
       gsap.fromTo(
-        nav.querySelector(`[data-tab="${tab}"] img, [data-tab="${tab}"] svg`),
+        nav.querySelector(`[data-tab="${tab}"] svg`),
         { y: 5, scale: 0.86 },
         { y: 0, scale: 1, duration: 0.5, ease: "back.out(2)", overwrite: true },
       );
