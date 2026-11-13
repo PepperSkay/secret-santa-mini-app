@@ -84,6 +84,9 @@
     timer = null,
     toastTimer,
     gameEpoch = 0;
+  let moveAnimating=false, queuedMoves=[];
+  const inputStats=window.__SANTA_DIAGNOSTICS__={build:"20261113-input4",samples:[]};
+  document.documentElement.dataset.build=inputStats.build;
   function loadStorage(k, fallback) {
     try {
       return JSON.parse(localStorage.getItem(k)) ?? fallback;
@@ -256,7 +259,7 @@
     if (S.busy) return toast("Дождись завершения хода");
     closeSheet();
     clearTimeout(timer);
-    gameEpoch++;
+    gameEpoch++;moveAnimating=false;queuedMoves=[];disposeBoard();
     const token = ++pageToken;
     const old = ["home", "games", "rating", "profile"].indexOf(S.tab),
       next = ["home", "games", "rating", "profile"].indexOf(tab);
@@ -574,7 +577,7 @@
       return;
     }
     clearTimeout(timer);
-    gameEpoch++;
+    gameEpoch++;moveAnimating=false;queuedMoves=[];disposeBoard();
     S.game = game;
     S.session = null;
     S.tab = "levels";
@@ -632,7 +635,7 @@
   async function startGame(game, level) {
     if (S.busy) return;
     S.busy = true;
-    const epoch = ++gameEpoch;
+    const epoch = ++gameEpoch;moveAnimating=false;queuedMoves=[];disposeBoard();
     try {
       const d = await post("/api/games/start", { game, level });
       if (epoch !== gameEpoch) return;
@@ -672,148 +675,57 @@
     }
     return points.slice(0, count)[i];
   }
-  function legacyDrawGame() {
-    clearTimeout(timer);
-    const s = S.session.state,
-      g = games.find((g) => g.id === s.game);
-    const progress =
-      s.game === "match3"
-        ? Math.min(100, (s.score / s.target) * 100)
-        : s.game === "mahjong"
-          ? (s.pairs / s.target) * 100
-          : s.game === "tree"
-            ? (s.placed.filter((v) => v >= 0).length / s.placed.length) * 100
-            : (s.board.filter((v, i) => v === i).length / s.board.length) * 100;
-    view.innerHTML = `<div class="backline"><button id="exit-game" aria-label="Назад">${icon("back")}</button><h2>${g.name}</h2><span class="pill" style="margin-left:auto">${s.level}/10</span></div><div class="game-header"><div class="game-meter"><small>Очки</small><strong>${fmt(s.score)}</strong></div><div class="game-meter"><small>Ходы</small><strong>${s.moves}</strong></div><div class="game-meter"><small>Награда</small><strong>❄ ${s.reward}</strong></div></div><div class="progress"><span style="width:${progress}%"></span></div><div id="play-board"></div><div id="game-status" class="game-status"></div><div class="game-tools"><button class="secondary" id="game-help">Правила</button>${["match3", "mahjong"].includes(s.game) ? '<button class="secondary" id="hint">Подсказка −1 ход</button>' : ""}${s.game === "mahjong" ? `<button class="secondary" id="shuffle">Смешать (${s.shuffles})</button>` : ""}${s.game === "puzzle" ? '<button class="secondary" id="sample">Образец</button>' : ""}<button class="secondary" id="restart">Заново</button></div>`;
-    $("#exit-game").onclick = () => {
-      if (S.busy) return;
-      sheet(
-        '<h2>Вернуться к уровням?</h2><p>Текущая партия будет прервана. Лучшие результаты и снежинки сохранятся.</p><button class="primary wide" id="leave-game">Выйти</button>',
-      );
-      $("#leave-game").onclick = () => {
-        closeSheet();
-        openLevels(S.game);
-      };
-    };
-    $("#game-help").onclick = () => sheet(`<h2>${g.name}</h2><p>${g.desc}</p>`);
-    $("#restart").onclick = () => {
-      sheet(
-        '<h2>Начать заново?</h2><p>Текущие ходы будут сброшены. Полученные ранее награды сохранятся.</p><button class="primary wide" id="restart-confirm">Начать заново</button>',
-      );
-      $("#restart-confirm").onclick = () => {
-        closeSheet();
-        startGame(S.game, S.level);
-      };
-    };
-    $("#hint")?.addEventListener("click", () => sendMove({ type: "hint" }));
-    $("#shuffle")?.addEventListener("click", () =>
-      sendMove({ type: "shuffle" }),
-    );
-    $("#sample")?.addEventListener("click", () =>
-      sheet(
-        `<h2>Зимняя картинка · уровень ${s.level}</h2><div class="puzzle-sample" style="${puzzleImageStyle(s)}" role="img" aria-label="Образец зимнего пазла"></div>`,
-      ),
-    );
-    const b = $("#play-board");
-    if (s.game === "match3" || s.game === "puzzle") {
-      b.className = "board " + (s.game === "puzzle" ? "puzzle" : "");
-      b.style.gridTemplateColumns = `repeat(${s.n},1fr)`;
-      b.innerHTML = s.board
-        .map(
-          (v, i) =>
-            `<button class="cell ${S.selected === i ? "selected" : ""} ${s.hint?.includes(i) ? "hinted" : ""}" data-cell="${i}" data-value="${v}" aria-label="${s.game === "puzzle" ? "Фрагмент" : "Фишка " + symbols[v]}, ряд ${Math.floor(i / s.n) + 1}, столбец ${(i % s.n) + 1}" ${s.game === "puzzle" ? `style="${puzzleImageStyle(s, v)}"` : ""}>${s.game === "puzzle" ? "" : symbols[v]}</button>`,
-        )
-        .join("");
-      b.querySelectorAll("[data-cell]").forEach(
-        (el) => (el.onclick = () => selectCell(+el.dataset.cell)),
-      );
-      wirePointer(b, s.n, s.game === "match3");
-      $("#game-status").textContent =
-        s.game === "match3"
-          ? `Цель: ${fmt(s.target)} очков${s.combo > 1 ? " · Каскад ×" + s.combo : ""}`
-          : `На месте ${s.board.filter((v, i) => v === i).length} из ${s.n * s.n} фрагментов`;
-    } else if (s.game === "mahjong") {
-      b.className = "board mahjong-board";
-      b.innerHTML = s.tiles
-        .map((t, i) =>
-          t.gone
-            ? ""
-            : `<button class="mahjong-tile ${!t.free ? "covered" : ""} ${S.selected === i ? "selected" : ""} ${s.hint?.includes(i) ? "hinted" : ""}" data-cell="${i}" style="left:${3 + t.x * 15 - t.z * 0.9}%;top:${5 + t.y * 22 - t.z * 2}%;z-index:${t.z + 1}" aria-label="${symbols[t.value]}, ${t.free ? "свободная" : "закрытая"} плитка">${symbols[t.value]}</button>`,
-        )
-        .join("");
-      b.querySelectorAll("[data-cell]").forEach(
-        (el) =>
-          (el.onclick = () => {
-            const i = +el.dataset.cell;
-            if (!s.tiles[i].free)
-              return toast("Сначала освободи верх и один из боков плитки");
-            selectCell(i);
-          }),
-      );
-      $("#game-status").textContent = `Пары: ${s.pairs} / ${s.target}`;
-    } else {
-      const remaining = Math.max(
-        0,
-        Math.ceil(s.memorize_until - Date.now() / 1000),
-      );
-      const count = s.slots || s.target.length;
-      const remembering = remaining > 0 && s.target;
-      b.className = "tree-board";
-      b.innerHTML =
-        treeSvg() +
-        Array.from({ length: count }, (_, i) => {
-          const [x, y] = treeCoords(i, count),
-            v = remembering ? s.target[i] : s.placed[i];
-          return `<button class="ornament-slot ${v >= 0 ? "filled" : ""}" data-slot="${i}" style="left:${x}%;top:${y}%" aria-label="Место для украшения ${i + 1}">${v >= 0 ? symbols[v] : "+"}</button>`;
-        }).join("");
-      const tools = document.createElement("div");
-      tools.className = "ornament-tools";
-      tools.innerHTML = symbols
-        .slice(0, 6)
-        .map(
-          (v, i) =>
-            `<button data-ornament="${i}" class="${S.ornament === i ? "selected" : ""}" aria-label="Украшение ${v}" ${remembering ? "disabled" : ""}>${v}</button>`,
-        )
-        .join("");
-      b.after(tools);
-      tools.querySelectorAll("button").forEach(
-        (el) =>
-          (el.onclick = () => {
-            S.ornament = +el.dataset.ornament;
-            tools
-              .querySelectorAll("button")
-              .forEach((x) => x.classList.toggle("selected", x === el));
-          }),
-      );
-      b.querySelectorAll("[data-slot]").forEach(
-        (el) =>
-          (el.onclick = () => {
-            if (remembering) return toast("Запомни образец");
-            sendMove({ i: +el.dataset.slot, value: S.ornament });
-          }),
-      );
-      $("#game-status").textContent = remembering
-        ? `Запомни украшения · ${remaining} сек.`
-        : "Расставь все игрушки, затем проверь результат";
-      if (!remembering) {
-        const check = document.createElement("button");
-        check.id = "check-tree";
-        check.className = "primary wide";
-        check.textContent = "Проверить ёлку";
-        check.disabled = s.placed.includes(-1);
-        check.onclick = () => sendMove({ type: "check" });
-        tools.after(check);
+  function disposeBoard(){const b=$("#play-board");b?._dispose?.();if(b)clearTimeout(b._peekTimer);}
+  function gameShell(s,g){
+    let board=$("#play-board");
+    if(board?.dataset.sessionId===S.session.id){updateGameMeters(s);return board}
+    board?._dispose?.();if(board)clearTimeout(board._peekTimer);
+    view.innerHTML=`<div class="backline"><button id="exit-game" aria-label="Назад">${icon("back")}</button><h2>${g.name}</h2><span class="pill" style="margin-left:auto">${s.record_mode?"∞ рекорд":s.level+"/10"}</span></div><div class="game-header"><div class="game-meter"><small>Очки</small><strong></strong></div><div class="game-meter"><small>${s.record_mode?"Рекорд":"Ходы"}</small><strong></strong></div><div class="game-meter"><small>${s.record_mode?s.game==="blocks"?"Линии":"Макс. плитка":"Награда"}</small><strong></strong></div></div>${s.record_mode?"":'<div class="progress"><span></span></div>'}<div id="play-board"></div><div id="game-status" class="game-status"></div><div class="game-tools"><button class="secondary" id="game-help">Правила</button>${["match3","mahjong"].includes(s.game)?'<button class="secondary" id="hint">Подсказка −1 ход</button>':""}${s.game==="mahjong"?'<button class="secondary" id="shuffle">Смешать</button>':""}${s.game==="puzzle"?'<button class="secondary" id="sample">Образец</button>':""}<button class="secondary" id="restart">Заново</button></div>`;
+    board=$("#play-board");board.dataset.sessionId=S.session.id;
+    $("#exit-game").onclick=()=>openLevels(S.game);
+    $("#game-help").onclick=()=>sheet(`<h2>${g.name}</h2><p>${g.desc}</p>`);
+    $("#restart").onclick=()=>{sheet('<h2>Начать заново?</h2><p>Текущая партия будет прервана. Подтверждённые результаты сохранятся.</p><button class="primary wide" id="restart-confirm">Начать заново</button>');$("#restart-confirm").onclick=()=>{closeSheet();startGame(S.game,S.level)}};
+    $("#hint")?.addEventListener("click",()=>sendMove({type:"hint"}));$("#shuffle")?.addEventListener("click",()=>sendMove({type:"shuffle"}));
+    $("#sample")?.addEventListener("click",()=>sheet(`<h2>Зимняя картинка · уровень ${s.level}</h2><div class="puzzle-sample" style="${puzzleImageStyle(s)}" role="img" aria-label="Образец зимнего пазла"></div>`));
+    updateGameMeters(s);return board;
+  }
+  function updateGameMeters(s){
+    const meters=view.querySelectorAll(".game-meter strong");
+    if(meters.length!==3)return;
+    const values=[fmt(s.score),s.record_mode?fmt(Math.max(S.progress.records?.[s.game]||0,s.score||0)):s.moves,s.record_mode?fmt(s.game==="blocks"?s.lines:Math.max(...s.board)):"❄ "+s.reward];
+    meters.forEach((el,i)=>{if(el.textContent!==String(values[i]))el.textContent=values[i]});
+    const fill=view.querySelector(".progress span");
+    if(fill){let progress=0;if(s.game==="match3")progress=s.score/s.target*100;else if(s.game==="mahjong"||s.game==="memory")progress=s.pairs/s.target*100;else if(s.game==="tree")progress=s.placed.filter(v=>v>=0).length/s.placed.length*100;else if(s.game==="puzzle")progress=s.board.filter((v,i)=>v===i).length/s.board.length*100;else if(WinterExtras.games.some(g=>g.id===s.game))progress=WinterExtras.progress(s);fill.style.width=Math.min(100,progress)+"%"}
+    if($("#shuffle"))$("#shuffle").textContent="Смешать ("+s.shuffles+")";
+  }
+  function legacyDrawGame(){
+    clearTimeout(timer);const s=S.session.state,g=games.find(g=>g.id===s.game),b=gameShell(s,g);
+    if(s.game==="match3"||s.game==="puzzle"){
+      if(!b.children.length){
+        b.className="board "+(s.game==="puzzle"?"puzzle":"");b.style.gridTemplateColumns=`repeat(${s.n},1fr)`;
+        b.innerHTML=s.board.map((v,i)=>`<button class="cell" data-cell="${i}" data-value="${v}" aria-label="${s.game==="puzzle"?"Фрагмент":"Фишка"}, ряд ${Math.floor(i/s.n)+1}, столбец ${i%s.n+1}"></button>`).join("");
+        b.querySelectorAll("[data-cell]").forEach(el=>el.onclick=()=>selectCell(+el.dataset.cell));wirePointer(b,s.n,s.game==="match3");
       }
-      if (remembering)
-        timer = setTimeout(async () => {
-          if (S.tab !== "playing" || !S.session) return;
-          try {
-            S.session.state = activeSync?.id===S.session.id ? activeSync.view() : S.session.state;
-            drawGame();
-          } catch (e) {
-            toast(e.message);
-          }
-        }, 1000);
+      s.board.forEach((v,i)=>{const el=b.children[i];el.classList.toggle("selected",S.selected===i);el.classList.toggle("hinted",!!s.hint?.includes(i));if(s.game==="puzzle"){el.style.cssText=puzzleImageStyle(s,v);el.dataset.value=v}else paintCell(el,v,s.n)});
+      $("#game-status").textContent=s.game==="match3"?`Цель: ${fmt(s.target)} очков${s.combo>1?" · Каскад ×"+s.combo:""}`:`На месте ${s.board.filter((v,i)=>v===i).length} из ${s.n*s.n} фрагментов`;
+    }else if(s.game==="mahjong"){
+      if(!b.children.length){b.className="board mahjong-board";b.innerHTML=s.tiles.map((t,i)=>`<button class="mahjong-tile" data-cell="${i}" style="left:${3+t.x*15-t.z*.9}%;top:${5+t.y*22-t.z*2}%;z-index:${t.z+1}"></button>`).join("");b.onclick=e=>{const el=e.target.closest("[data-cell]");if(!el)return;const i=+el.dataset.cell;if(!S.session.state.tiles[i].free)return toast("Сначала освободи верх и один из боков плитки");selectCell(i)}}
+      s.tiles.forEach((t,i)=>{const el=b.children[i];el.hidden=t.gone;el.disabled=t.gone;el.classList.toggle("covered",!t.free);el.classList.toggle("selected",S.selected===i);el.classList.toggle("hinted",!!s.hint?.includes(i));if(el.textContent!==symbols[t.value])el.textContent=symbols[t.value];el.setAttribute("aria-label",symbols[t.value]+(t.free?", свободная плитка":", закрытая плитка"))});
+      $("#game-status").textContent=`Пары: ${s.pairs} / ${s.target}`;
+    }else{
+      const remaining=Math.max(0,Math.ceil(s.memorize_until-Date.now()/1000)),count=s.slots||s.target.length,remembering=remaining>0&&s.target;
+      if(!b.querySelector("[data-slot]")){
+        b.className="tree-board";b.innerHTML=treeSvg()+Array.from({length:count},(_,i)=>{const[x,y]=treeCoords(i,count);return `<button class="ornament-slot" data-slot="${i}" style="left:${x}%;top:${y}%" aria-label="Место для украшения ${i+1}"></button>`}).join("");
+        const tools=document.createElement("div");tools.className="ornament-tools";tools.innerHTML=symbols.slice(0,6).map((v,i)=>`<button data-ornament="${i}" aria-label="Украшение ${v}">${v}</button>`).join("");b.after(tools);
+        tools.onclick=e=>{const el=e.target.closest("[data-ornament]");if(!el||el.disabled)return;S.ornament=+el.dataset.ornament;tools.querySelectorAll("button").forEach(x=>x.classList.toggle("selected",x===el))};
+        b.onclick=e=>{const el=e.target.closest("[data-slot]");if(!el)return;if(Date.now()/1000<S.session.state.memorize_until)return toast("Запомни образец");sendMove({i:+el.dataset.slot,value:S.ornament})};
+        const check=document.createElement("button");check.id="check-tree";check.className="primary wide";check.textContent="Проверить ёлку";check.onclick=()=>sendMove({type:"check"});tools.after(check);
+      }
+      b.querySelectorAll("[data-slot]").forEach((el,i)=>{const v=remembering?s.target[i]:s.placed[i];el.classList.toggle("filled",v>=0);el.textContent=v>=0?symbols[v]:"+"});
+      view.querySelectorAll("[data-ornament]").forEach(el=>{el.disabled=!!remembering;el.classList.toggle("selected",+el.dataset.ornament===S.ornament)});
+      $("#check-tree").hidden=!!remembering;$("#check-tree").disabled=s.placed.includes(-1);
+      $("#game-status").textContent=remembering?`Запомни украшения · ${remaining} сек.`:"Расставь все игрушки, затем проверь результат";
+      if(remembering)timer=setTimeout(()=>{if(S.tab==="playing"&&S.session)drawGame()},1000);
     }
   }
   function selectCell(i) {
@@ -915,47 +827,14 @@
       y = row * n + Math.floor(fragment / n);
     return `background-image:url('assets/puzzle-atlas.webp');background-size:${side * 100}% ${side * 100}%;background-position:${(x / (side - 1)) * 100}% ${(y / (side - 1)) * 100}%`;
   }
-  function drawGame() {
-    if (![...window.WinterExtras.games,...window.WinterHoliday.games].some((g) => g.id === S.game)) {
-      legacyDrawGame();
-      return;
-    }
-    clearTimeout(timer);
-    if(activeSync?.id===S.session.id)S.session.state=activeSync.view();
-    const s = S.session.state,
-      g = games.find((x) => x.id === s.game);
-    const recordMode = Boolean(s.record_mode);
-    const best = Math.max(S.progress.records?.[s.game] || 0, S.session.record || 0, s.score || 0);
-    const thirdLabel = s.game === "blocks" ? "Линии" : "Макс. плитка";
-    const thirdValue = !recordMode ? 0 : s.game === "blocks" ? s.lines : Math.max(...s.board);
-    view.innerHTML = `<div class="backline"><button id="exit-game" aria-label="Назад">${icon("back")}</button><h2>${g.name}</h2><span class="pill" style="margin-left:auto">${recordMode ? "∞ рекорд" : `${s.level}/10`}</span></div><div class="game-header"><div class="game-meter"><small>Очки</small><strong>${fmt(s.score)}</strong></div><div class="game-meter"><small>${recordMode ? "Рекорд" : "Ходы"}</small><strong>${recordMode ? fmt(best) : s.moves}</strong></div><div class="game-meter"><small>${recordMode ? thirdLabel : "Награда"}</small><strong>${recordMode ? fmt(thirdValue) : `❄ ${s.reward}`}</strong></div></div>${recordMode ? "" : `<div class="progress"><span style="width:${Math.min(100, g.holiday ? 0 : WinterExtras.progress(s))}%"></span></div>`}<div id="play-board"></div><div id="game-status" class="game-status"></div><div class="game-tools"><button class="secondary" id="game-help">Правила</button><button class="secondary" id="restart">Заново</button></div>`;
-    $("#exit-game").onclick = () => {
-      if (!S.busy) openLevels(S.game);
-    };
-    $("#game-help").onclick = () => sheet(`<h2>${g.name}</h2><p>${g.desc}</p>`);
-    $("#restart").onclick = () => {
-      if (!S.busy) startGame(S.game, S.level);
-    };
-    const id = S.session.id,
-      epoch = gameEpoch;
-    (g.holiday ? WinterHoliday : WinterExtras).render({
-      board: $("#play-board"),
-      state: s,
-      send: sendMove,
-      toast,
-      motion,
-      refresh: async () => {
-        if (S.busy || S.session?.id !== id || epoch !== gameEpoch) return;
-        try {
-          const fresh = activeSync?.id===id ? {id,version:S.session.version,state:activeSync.view()} : await api("/api/games/session/" + id);
-          if (S.busy || S.session?.id !== id || epoch !== gameEpoch || fresh.version < S.session.version) return;
-          S.session = fresh;
-          drawGame();
-        } catch (e) {
-          toast(e.message);
-        }
-      },
-    });
+  function drawGame(){
+    clearTimeout(timer);if(!S.session)return;if(activeSync?.id===S.session.id)S.session.state=activeSync.view();
+    if(![...WinterExtras.games,...WinterHoliday.games].some(g=>g.id===S.game)){legacyDrawGame();return}
+    const s=S.session.state,g=games.find(g=>g.id===s.game),board=gameShell(s,g),id=S.session.id,epoch=gameEpoch;
+    (g.holiday?WinterHoliday:WinterExtras).render({board,state:s,send:sendMove,toast,motion,refresh:()=>{
+      if(S.session?.id!==id||epoch!==gameEpoch||moveAnimating)return;
+      S.session.state=activeSync.view();drawGame();
+    }});
   }
   function paintCell(el, value, n) {
     if (!el) return;
@@ -966,12 +845,13 @@
       `Фишка ${symbols[value]}, ряд ${Math.floor(+el.dataset.cell / n) + 1}, столбец ${(+el.dataset.cell % n) + 1}`,
     );
   }
-  async function updateMatch(result) {
+  async function updateMatch(result,epoch) {
     const s = result.state,
       board = $("#play-board"),
       cells = [...board.querySelectorAll(".cell")],
       n = s.n;
     cells.forEach((el) => el.classList.remove("selected", "hinted"));
+    const alive=()=>epoch===gameEpoch&&board.isConnected;
     const pair = s.swap;
     if (pair && motion()) {
       const [a, b] = pair,
@@ -991,6 +871,7 @@
           ease: "power2.out",
         }),
       ]);
+      if(!alive())return;
       if (s.invalid) {
         await Promise.all(
           pair.map((i) =>
@@ -1014,11 +895,13 @@
     }
     if (!s.invalid) {
       for (const frame of s.frames || []) {
+        if(!alive())return;
         if (motion())
           await gsap.to(
             frame.clear.map((i) => cells[i]),
             { scale: 0.6, opacity: 0, duration: 0.16, ease: "power2.in" },
           );
+        if(!alive())return;
         for (const drop of frame.drops)
           paintCell(cells[drop.to], drop.value, n);
         if (motion()) {
@@ -1047,6 +930,7 @@
           );
         }
       }
+      if(!alive())return;
       s.board.forEach((v, i) => {
         if (+cells[i].dataset.value !== v) paintCell(cells[i], v, n);
       });
@@ -1060,6 +944,7 @@
           );
       }
     }
+    if(!alive())return;
     for (const i of s.hint || []) cells[i]?.classList.add("hinted");
     const meters = view.querySelectorAll(".game-meter strong");
     meters[0].textContent = fmt(s.score);
@@ -1070,98 +955,60 @@
       `Цель: ${fmt(s.target)} очков${s.combo > 1 ? " · Каскад ×" + s.combo : ""}`;
   }
   async function sendMove(action) {
-    if (S.busy || !S.session) return;
-    S.busy = true;
-    const epoch = gameEpoch;
-    const id = S.session.id;
-    try {
-      const oldRects = new Map(
-        [...view.querySelectorAll("[data-cell]")].map((el) => [
-          +el.dataset.cell,
-          el.getBoundingClientRect(),
-        ]),
-      );
-      if(!activeSync||activeSync.id!==id)throw Error("Открой игру заново");
-      const result=activeSync.step(action);
-      if (epoch !== gameEpoch) return;
-      const hit = result.state.effects?.flat() || [];
-      if (motion() && hit.length && S.game === "mahjong")
-        await gsap.to(
-          hit
-            .map((i) => view.querySelector(`[data-cell="${i}"]`))
-            .filter(Boolean),
-          { scale: 0.65, opacity: 0, y: -12, duration: 0.2, ease: "power2.in" },
-        );
-      if (S.game === "blocks" && result.state.cleared?.length) {
-        const piece=S.session.state.tray[action.piece];
-        piece?.forEach(([dx,dy])=>{const cell=view.querySelector('[data-block-cell="'+((action.y+dy)*8+action.x+dx)+'"]');cell?.classList.add("filled","color-"+(action.piece+1));});
-        await animateBlockClear(result.state.cleared);
-      }
-      if(result.state.record_mode){S.progress.records ||= {};const before=S.progress.records[S.game]||0;S.progress.records[S.game]=Math.max(before,result.state.score||0);S.progress.score+=S.progress.records[S.game]-before;}
-      S.session = result;
-      S.selected = null;
-      if (result.balance !== undefined) S.me.user.snowflakes = result.balance;
-      if (S.game === "match3") await updateMatch(result);
-      else { drawGame(); if(S.game==="merge2048"&&motion())gsap.fromTo("#play-board .merge-tile",{x:action.direction==="left"?24:action.direction==="right"?-24:0,y:action.direction==="up"?24:action.direction==="down"?-24:0},{x:0,y:0,duration:.16,ease:"power2.out",clearProps:"transform"}); }
-      if (motion()) {
-        if (S.game === "puzzle" && action.a !== undefined) {
-          const a = view.querySelector(`[data-cell="${action.a}"]`),
-            b = view.querySelector(`[data-cell="${action.b}"]`),
-            ra = oldRects.get(action.a),
-            rb = oldRects.get(action.b);
-          if (a && b && ra && rb) {
-            gsap.fromTo(
-              a,
-              { x: rb.x - ra.x, y: rb.y - ra.y },
-              { x: 0, y: 0, duration: 0.3, ease: "power2.out" },
-            );
-            gsap.fromTo(
-              b,
-              { x: ra.x - rb.x, y: ra.y - rb.y },
-              { x: 0, y: 0, duration: 0.3, ease: "power2.out" },
-            );
-          }
-        }
-      }
-      if (result.state.won || result.state.lost) { toast("Результат сохраняется…"); activeSync.flush(); }
-    } catch (e) { toast(e.message);
-    } finally {
-      S.busy = false;
+    if(S.busy||!S.session)return;
+    if(S.session.state.won||S.session.state.lost){queuedMoves=[];return}
+    if(moveAnimating){
+      if(queuedMoves.length<8){queuedMoves.push(action);const el=view.querySelector(`[data-cell="${action.a}"]`);el?.classList.add("selected");}
+      return;
     }
+    const epoch=gameEpoch,id=S.session.id,begin=performance.now(),board=$("#play-board");
+    try{
+      if(!activeSync||activeSync.id!==id)throw Error("Открой игру заново");
+      const previous=S.session.state;
+      // Only the puzzle swap needs geometry. Other games avoid a forced layout read.
+      const pair=S.game==="puzzle"&&action.a!==undefined?[board.children[action.a],board.children[action.b]]:null;
+      const rects=pair?.map(el=>el.getBoundingClientRect());
+      const result=activeSync.step(action),hit=result.state.effects?.flat()||[];
+      if(result.state.record_mode){S.progress.records||={};const before=S.progress.records[S.game]||0;S.progress.records[S.game]=Math.max(before,result.state.score||0);S.progress.score+=S.progress.records[S.game]-before;}
+      if(motion()&&S.game==="mahjong")animateRemoved(hit.map(i=>board.querySelector(`[data-cell="${i}"]`)).filter(Boolean));
+      if(motion()&&S.game==="blocks"&&result.state.cleared?.length){
+        previous.tray[action.piece]?.forEach(([dx,dy])=>{const cell=board.children[(action.y+dy)*8+action.x+dx];cell?.classList.add("filled","color-"+(action.piece+1));});
+        animateBlockClear(result.state.cleared);
+      }
+      S.session=result;S.selected=null;
+      if(S.game==="match3"){
+        moveAnimating=true;await updateMatch(result,epoch);
+      }else{
+        drawGame();
+        if(S.game==="merge2048"&&motion())gsap.fromTo(board.children,{x:action.direction==="left"?24:action.direction==="right"?-24:0,y:action.direction==="up"?24:action.direction==="down"?-24:0},{x:0,y:0,duration:.16,ease:"power2.out",overwrite:true,clearProps:"transform"});
+        if(pair&&motion())pair.forEach((el,i)=>gsap.fromTo(el,{x:rects[1-i].x-rects[i].x,y:rects[1-i].y-rects[i].y},{x:0,y:0,duration:.3,ease:"power2.out",overwrite:true,clearProps:"transform"}));
+      }
+      if(epoch!==gameEpoch||S.session?.id!==id)return;
+      if(result.state.won||result.state.lost)queuedMoves=[];
+      const sample={game:result.state.game,handlerMs:performance.now()-begin};
+      inputStats.samples.push(sample);if(inputStats.samples.length>100)inputStats.samples.shift();
+      board.dataset.inputMs=sample.handlerMs.toFixed(2);
+      requestAnimationFrame(()=>{sample.nextFrameMs=performance.now()-begin;board.dataset.frameMs=sample.nextFrameMs.toFixed(2)});
+      if(result.state.won||result.state.lost){toast("Результат сохраняется…");activeSync.flush()}
+    }catch(e){toast(e.message)}
+    finally{if(epoch===gameEpoch){moveAnimating=false;const next=queuedMoves.shift();if(next)sendMove(next)}}
   }
-  async function animateBlockClear(indices) {
-    const cells = indices
-      .map((i) => view.querySelector(`[data-block-cell="${i}"]`))
-      .filter(Boolean);
-    if (!cells.length) return;
-    cells.forEach((cell) => cell.classList.add("clearing"));
-    tg?.HapticFeedback?.impactOccurred("medium");
-    if (!motion()) return;
-    await new Promise((resolve) => {
-      const timeline = gsap.timeline({ onComplete: resolve });
-      timeline
-        .to(cells, {
-          scale: 1.16,
-          filter: "brightness(1.75)",
-          duration: 0.16,
-          ease: "power2.out",
-          stagger: { each: 0.025, from: "center" },
-        })
-        .to(cells, {
-          scale: 0,
-          rotation: 22,
-          opacity: 0,
-          duration: 0.3,
-          ease: "back.in(2.4)",
-          stagger: { each: 0.026, from: "center" },
-        })
-        .fromTo(
-          "#play-board",
-          { x: -5 },
-          { x: 5, duration: 0.06, repeat: 3, yoyo: true, clearProps: "transform" },
-          0.08,
-        );
+  function animationCopies(elements){
+    return elements.map(el=>{const copy=el.cloneNode(true);copy.removeAttribute("data-cell");copy.removeAttribute("data-block-cell");copy.removeAttribute("data-index");copy.setAttribute("aria-hidden","true");copy.tabIndex=-1;copy.disabled=true;
+      copy.style.cssText+=`;position:absolute;left:${el.offsetLeft}px;top:${el.offsetTop}px;width:${el.offsetWidth}px;height:${el.offsetHeight}px;margin:0;pointer-events:none;z-index:20`;
+      // Copies live outside the board's indexed children, so live input stays stable.
+      const layer=el.parentElement._effectsLayer||(el.parentElement._effectsLayer=document.createElement("div"));
+      layer.className="game-effects-layer";layer.style.cssText=`left:${el.parentElement.offsetLeft}px;top:${el.parentElement.offsetTop}px;width:${el.parentElement.offsetWidth}px;height:${el.parentElement.offsetHeight}px`;el.parentElement.after(layer);layer.append(copy);return copy;
     });
+  }
+  function animateRemoved(elements){if(!elements.length)return;const copies=animationCopies(elements);gsap.to(copies,{scale:.65,opacity:0,y:-12,duration:.2,ease:"power2.in",onComplete:()=>copies.forEach(el=>el.remove())})}
+  function animateBlockClear(indices){
+    const cells=indices.map(i=>view.querySelector(`[data-block-cell="${i}"]`)).filter(Boolean);if(!cells.length)return;
+    const copies=animationCopies(cells);copies.forEach(el=>el.classList.add("clearing"));tg?.HapticFeedback?.impactOccurred("medium");
+    gsap.timeline({onComplete:()=>copies.forEach(el=>el.remove())})
+      .to(copies,{scale:1.16,filter:"brightness(1.75)",duration:.16,ease:"power2.out",stagger:{each:.025,from:"center"}})
+      .to(copies,{scale:0,rotation:22,opacity:0,duration:.3,ease:"back.in(2.4)",stagger:{each:.026,from:"center"}})
+      .fromTo("#play-board",{x:-5},{x:5,duration:.06,repeat:3,yoyo:true,clearProps:"transform",overwrite:"auto"},.08);
   }
   function showResult(r) {
     const s = r.state;
@@ -1256,7 +1103,7 @@
   );
   window.addEventListener("online",()=>syncSessions.forEach(s=>s.flush()));
   document.addEventListener("visibilitychange", () => {
-    if(document.hidden)syncSessions.forEach(s=>s.flush());
+    if(document.hidden){ArcadeSync.flushJournal();syncSessions.forEach(s=>s.flush())}
     if (!document.hidden) {
       gsapIf(() => gsap.globalTimeline.resume());
       if (!S.busy && S.session?.state.game === "tree") drawGame();
@@ -1265,7 +1112,7 @@
   function syncOptions(){return {api,owner:String(S.me.user.id||S.me.user.telegram_id||S.me.user.username),onStatus:message=>{let el=$("#sync-status");if(!message){el?.remove();return}if(!el){el=document.createElement("div");el.id="sync-status";el.className="sync-status";document.body.append(el)}el.textContent=message;},onSaved:(result,session)=>{
     if(result.balance!==undefined)S.me.user.snowflakes=result.balance;
     if(session.id===S.session?.id&&!session.pending.length&&!session.resultShown&&(session.runtime.won||session.runtime.lost)){
-      if(S.busy){setTimeout(()=>syncOptions().onSaved(result,session),60);return}session.resultShown=true;
+      if(S.busy||moveAnimating||queuedMoves.length){setTimeout(()=>syncOptions().onSaved(result,session),60);return}session.resultShown=true;
       const current={...result,state:session.view()};refreshProgress().catch(()=>{});showResult(current);
       if(S.game==="tree"&&!current.state.won){$("#overlay .result p").textContent="Игрушки не совпали с образцом. Следующая попытка — с новым расположением.";$("#result-next").textContent="Заново: новый образец";}
     }
@@ -1317,7 +1164,7 @@
       }
       const progress = await progressRequest;
       if (progress) S.progress = progress;
-      for(const session of ArcadeSync.restore(syncOptions()))syncSessions.set(session.id,session);
+      ArcadeSync.restore(syncOptions()).then(sessions=>{for(const session of sessions)syncSessions.set(session.id,session)}).catch(()=>{});
       home();
       animateIn();
       snow();
