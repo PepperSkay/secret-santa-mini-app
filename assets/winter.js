@@ -86,7 +86,7 @@
     toastTimer,
     gameEpoch = 0;
   let moveAnimating=false, queuedMoves=[];
-  const inputStats=window.__SANTA_DIAGNOSTICS__={build:"20261113-plinko1",samples:[]};
+  const inputStats=window.__SANTA_DIAGNOSTICS__={build:"20261113-plinko2",samples:[]};
   document.documentElement.dataset.build=inputStats.build;
   function loadStorage(k, fallback) {
     try {

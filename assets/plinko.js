@@ -26,15 +26,10 @@
       if(!data||disposed)return;
       const input=$('#plinko-stake'),stake=Number(input.value),valid=Number.isInteger(stake)&&stake>=data.rules.min_stake&&stake<=data.rules.max_stake;
       input.disabled=busy||!!request;view.querySelectorAll('[data-stake]').forEach(el=>el.disabled=busy||!!request);
-      const button=$('#plinko-throw');button.disabled=busy||(!request&&(!valid||stake>data.balance||!$('#plinko-consent').checked));
+      const button=$('#plinko-throw');button.disabled=busy||(!request&&(!valid||stake>data.balance));
       button.textContent=busy?'Снежок в пути…':request?'Проверить незавершённый бросок':'Бросить снежок';
-      $('#plinko-consent').disabled=busy||!!request;
-      view.querySelectorAll('[data-payout]').forEach(el=>el.textContent=valid?fmt(Math.floor(stake*Number(el.dataset.payout)/10))+' ❄':'—');
       $('#plinko-balance').textContent=fmt(data.balance)+' ❄';
       $('#plinko-error').textContent=!valid?'Введи целую ставку от '+data.rules.min_stake+' до '+fmt(data.rules.max_stake)+' ❄':!request&&stake>data.balance?'Недостаточно снежинок':'';
-    }
-    function history(){
-      $('#plinko-history').innerHTML=data.history.length?data.history.slice(0,10).map(r=>`<li><span>${label(r.multiplier)} <small>· ставка ${fmt(r.stake)}</small></span><strong class="${r.payout>r.stake?'plus':''}">${r.payout-r.stake>0?'+':''}${fmt(r.payout-r.stake)} ❄</strong></li>`).join(''):'<li class="muted">Здесь появятся твои броски</li>';
     }
     function draw(ball=null,slot=-1){
       if(!drawing||disposed)return;
@@ -78,7 +73,7 @@
     async function send(){
       if(busy||disposed)return;
       const stake=Number($('#plinko-stake').value);
-      if(!request){if(!Number.isInteger(stake)||stake<5||stake>data.rules.max_stake||stake>data.balance||!$('#plinko-consent').checked)return;
+      if(!request){if(!Number.isInteger(stake)||stake<5||stake>data.rules.max_stake||stake>data.balance)return;
         request={request_id:requestId(),stake,rules_version:data.rules.version};
         try{localStorage.setItem(storageKey,JSON.stringify(request))}catch{setStatus('Не удалось сохранить бросок на устройстве. Освободи место и попробуй ещё раз.','error');request=null;return}
       }
@@ -89,7 +84,7 @@
         request=null;clearPending(sentId);data.balance=result.balance;data.history=[result.round,...data.history.filter(r=>r.request_id!==result.round.request_id)].slice(0,20);
         if(disposed)return;
         onBalance(result.balance);
-        updateControls();history();setStatus('Снежок летит…');await animate(result.round);if(disposed)return;
+        updateControls();setStatus('Снежок летит…');await animate(result.round);if(disposed)return;
         const r=result.round,net=r.payout-r.stake;
         setStatus(`${label(r.multiplier)} · вернулось ${fmt(r.payout)} ❄ · ${net>0?'+':''}${fmt(net)} ❄ к балансу`,net>0?'plus':net<0?'minus':'neutral');
         if(motion())gsap.fromTo($('#plinko-result'),{scale:.94,opacity:.6},{scale:1,opacity:1,duration:.35,ease:'back.out(1.4)',overwrite:true});
@@ -104,11 +99,11 @@
         const state=await api('/api/plinko');if(disposed)return;data=state;onBalance(data.balance);
         if(state.owner&&storageKey!=='santa.plinko.pending.'+state.owner){storageKey='santa.plinko.pending.'+state.owner;request=null;try{const saved=JSON.parse(localStorage.getItem(storageKey)||'null');if(saved?.request_id&&Number.isInteger(saved.stake))request=saved}catch{}}
         if(request&&data.history.some(r=>r.request_id===request.request_id)){clearPending(request.request_id);request=null}
-        view.innerHTML=`<section class="plinko-intro"><div><span class="eyebrow">СНЕЖНАЯ АРКАДА</span><h1>Новогодняя Plinko</h1><p>Запусти снежок и смотри, куда он попадёт</p></div><span class="plinko-intro-art" aria-hidden="true">❄</span></section><div class="plinko-wallet"><span>Игровые снежинки</span><strong id="plinko-balance"></strong></div><div class="plinko-stakes"><label for="plinko-stake">Ставка, ❄<input id="plinko-stake" type="number" inputmode="numeric" min="5" max="100000" step="1" value="${request?.stake||5}" aria-describedby="plinko-error"></label><div class="plinko-presets">${[5,10,25,50].map(v=>`<button class="secondary" data-stake="${v}">${v}</button>`).join('')}</div></div><p class="plinko-error" id="plinko-error" role="status"></p><div class="plinko-board"><canvas aria-label="Снежок падает между ледяными штырьками в одну из 11 ячеек"></canvas></div><div id="plinko-result" class="plinko-result" role="status">${request?'Есть незавершённый бросок — проверь его результат':'Выбери ставку. Бросок запускается только кнопкой ниже.'}</div><label class="plinko-consent"><input type="checkbox" id="plinko-consent" ${request?'checked':''}><span>Понимаю: 90% бросков возвращают меньше ставки. Только виртуальные предметы, без продажи и вывода.</span></label><button class="primary wide" id="plinko-throw">Бросить снежок</button><details class="plinko-rules panel"><summary>Вероятности и правила</summary><p>90% исходов — x0,2 или x0,5; 10% — x1 и выше. x1 возвращает ставку, прибыль дают x2, x5 и x10. Выплата округляется вниз до целой снежинки. Траектория не влияет на результат.</p><table><thead><tr><th>Исход</th><th>Шанс</th><th>Вернётся</th></tr></thead><tbody>${data.rules.outcomes.map(o=>`<tr><td>${label(o.multiplier)}</td><td>${String(o.weight/100).replace('.',',')}%</td><td data-payout="${o.multiplier}"></td></tr>`).join('')}</tbody></table></details><section class="plinko-prize panel"><span class="virtual-phone" aria-hidden="true"><i></i><i></i><i></i><b>🎀</b></span><div><h3>Виртуальная фигурка<br>iPhone 18 Pro Max</h3><p>${esc(data.rules.prize_description)}</p></div></section><section class="panel plinko-recent"><h2>Последние броски</h2><ul id="plinko-history"></ul></section>`;
+        view.innerHTML=`<section class="plinko-intro"><div><span class="eyebrow">СНЕЖНАЯ АРКАДА</span><h1>Новогодняя Plinko</h1><p>Запусти снежок и смотри, куда он попадёт</p></div><span class="plinko-intro-art" aria-hidden="true">❄</span></section><div class="plinko-wallet"><span>Игровые снежинки</span><strong id="plinko-balance"></strong></div><div class="plinko-stakes"><label for="plinko-stake">Ставка, ❄<input id="plinko-stake" type="number" inputmode="numeric" min="5" max="100000" step="1" value="${request?.stake||5}" aria-describedby="plinko-error"></label><div class="plinko-presets">${[5,10,25,50].map(v=>`<button class="secondary" data-stake="${v}">${v}</button>`).join('')}</div></div><p class="plinko-error" id="plinko-error" role="status"></p><div class="plinko-board"><canvas aria-label="Снежок падает между ледяными штырьками в одну из 11 ячеек"></canvas></div><div id="plinko-result" class="plinko-result" role="status">${request?'Есть незавершённый бросок — проверь его результат':'Выбери ставку. Бросок запускается только кнопкой ниже.'}</div><button class="primary wide" id="plinko-throw">Бросить снежок</button>`;
         canvas=$('canvas');measure();if(window.ResizeObserver){resize=new ResizeObserver(measure);resize.observe(canvas)}
-        $('#plinko-stake').oninput=updateControls;$('#plinko-consent').onchange=updateControls;$('#plinko-throw').onclick=send;
+        $('#plinko-stake').oninput=updateControls;$('#plinko-throw').onclick=send;
         view.querySelectorAll('[data-stake]').forEach(el=>el.onclick=()=>{$('#plinko-stake').value=el.dataset.stake;updateControls()});
-        history();updateControls();if(motion())gsap.fromTo(view.children,{opacity:0,y:15},{opacity:1,y:0,duration:.4,stagger:.025,ease:'power3.out',clearProps:'opacity,transform'});
+        updateControls();if(motion())gsap.fromTo(view.children,{opacity:0,y:15},{opacity:1,y:0,duration:.4,stagger:.025,ease:'power3.out',clearProps:'opacity,transform'});
       }catch(e){if(!disposed){view.innerHTML='<section class="panel"><h2>Plinko пока недоступна</h2><p>'+esc(e.message)+'</p><button class="primary wide" id="plinko-retry">Повторить</button></section>';$('#plinko-retry').onclick=load}}
     }
     load();return {dispose(){disposed=true;resize?.disconnect();if(raf!==null)cancelAnimationFrame(raf);animationEnd?.();animationEnd=null;paint=null}};
