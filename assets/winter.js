@@ -79,14 +79,14 @@
     snow: loadStorage("santa.snow", true),
     reduce: loadStorage("santa.reduce", false),
   };
-  let wonderlandController=null, pendingWonderlandTab=null, visitingHomeCode=null;
+  let wonderlandController=null, pendingWonderlandTab=null;
   let activeSync=null; const syncSessions=new Map();
   let pageToken = 0,
     timer = null,
     toastTimer,
     gameEpoch = 0;
   let moveAnimating=false, queuedMoves=[];
-  const inputStats=window.__SANTA_DIAGNOSTICS__={build:"20261113-workshop1",samples:[]};
+  const inputStats=window.__SANTA_DIAGNOSTICS__={build:"20261113-christmas2",samples:[]};
   document.documentElement.dataset.build=inputStats.build;
   function loadStorage(k, fallback) {
     try {
@@ -230,12 +230,12 @@
       ]
         .map(
           ([id, title, i]) =>
-            `<button data-tab="${id}" aria-label="${title}">${icon(i)}<span>${title}</span></button>`,
+            `<button data-tab="${id}" aria-label="${title}"><img class="festive-nav-icon" src="assets/workshop/nav_${id==='home'?'home':id==='games'?'games':id==='craft'?'craft':id==='tree'?'tree':'profile'}.webp" alt="" width="44" height="44">${icon(i)}<span>${title}</span></button>`,
         )
         .join("");
   }
   function navTo(tab) {
-    tab = tab === "cabin" ? "home" : tab === "rating" ? "games" : tab;
+    tab = tab === "rating" ? "games" : tab;
     const index = ["home", "games", "craft", "tree", "profile"].indexOf(tab);
     if (index < 0) return;
     nav.querySelectorAll("button").forEach((b) => {
@@ -250,14 +250,14 @@
         overwrite: true,
       });
       gsap.fromTo(
-        nav.querySelector(`[data-tab="${tab}"] svg`),
+        nav.querySelector(`[data-tab="${tab}"] img, [data-tab="${tab}"] svg`),
         { y: 5, scale: 0.86 },
         { y: 0, scale: 1, duration: 0.5, ease: "back.out(2)", overwrite: true },
       );
     } else $("#nav-glow").style.transform = `translateX(${index * 100}%)`;
   }
   async function navigate(tab) {
-    if (["craft","tree","cabin"].includes(tab) && !S.me?.user?.exists) {pendingWonderlandTab=tab;return toast("Секунду, профиль загружается")}
+    if (["craft","tree"].includes(tab) && !S.me?.user?.exists) {pendingWonderlandTab=tab;return toast("Секунду, профиль загружается")}
     if (S.me?.user.active === false) {
       registration();
       return;
@@ -286,7 +286,7 @@
     window.scrollTo({ top: 0, behavior: "instant" });
     if (tab === "home") home();
     else if (tab === "games") allGames();
-    else if (["craft","tree","cabin"].includes(tab)) wonderlandPage(tab);
+    else if (["craft","tree"].includes(tab)) wonderlandPage(tab);
     else if (tab === "rating") await rating();
     else if (tab === "profile") profile();
     else if (tab === "favorites") favorites();
@@ -299,10 +299,9 @@
     if (token === pageToken) animateIn();
   }
   function wonderlandPage(tab) {
-    header(tab === "craft" ? "Мастерская" : tab === "tree" ? "Новогодняя ёлка" : "Мой домик");
+    header(tab === "craft" ? "Мастерская" : "Новогодняя ёлка");
     scene.classList.add("play-scene");
-    const homeCode=visitingHomeCode;visitingHomeCode=null;
-    wonderlandController=WinterWonderland.mount({view,api,esc,fmt,toast,sheet,closeSheet,tg,owner:String(S.me.user.id),motion:()=>motion()&&S.snow,mode:tab === "cabin" ? "cabin" : tab,visitor:tab === "cabin"&&/^[A-Za-z0-9_-]{10,32}$/.test(homeCode)?homeCode:null});
+    wonderlandController=WinterWonderland.mount({view,api,esc,fmt,toast,sheet,closeSheet,tg,owner:String(S.me.user.id),motion:()=>motion()&&S.snow,mode:tab});
   }
   function gameCard(g) {
     const done = S.progress.levels.filter((l) => l.game === g.id).length;
@@ -328,7 +327,7 @@
   function home() {
     header("", "home");
     const latest = S.progress.levels.at(-1);
-    view.innerHTML = `<button class="wl-home-entry" data-tab="cabin"><img src="assets/workshop/room-cranberry.svg" alt="Уютный новогодний домик" width="900" height="720"><div><small>ТВОЁ МЕСТО В СКАЗКЕ</small><h2>Там, где<br>живёт чудо</h2><p>Зажги камин, укрась домик и пригласи друзей.</p><strong>Открыть мой домик →</strong></div></button><div class="wl-world-links"><button data-tab="craft">🎀 Мастерская<small>30 подарков. Шесть уровней волшебства.</small></button><button data-tab="tree">🎄 Новогодняя ёлка<small>Создай подарок и найди ему место.</small></button></div><button class="secondary wide" data-tab="rating">🏆 Общий рейтинг игроков</button><div class="categories">${[
+    view.innerHTML = `<div class="wl-world-links"><button data-tab="craft">🎀 Мастерская<small>30 подарков. Шесть уровней волшебства.</small></button><button data-tab="tree">🎄 Новогодняя ёлка<small>Создай подарок и найди ему место.</small></button></div><button class="secondary wide" data-tab="rating">🏆 Общий рейтинг игроков</button><div class="categories">${[
       ["❄", "Новогодние", "games"],
       ["🔥", "Популярные", "games"],
       ["✦", "Новые", "games"],
@@ -393,7 +392,6 @@
       xp = S.progress.score % 3000;
     view.innerHTML = `<section class="profile-head"><div class="avatar">${esc(S.avatar)}<button class="avatar-edit" id="avatar-edit" aria-label="Изменить аватар">✎</button></div><h1>${esc(u.alias)}</h1><p>Уровень ${level}</p></section><div class="profile-xp"><div class="progress"><span style="width:${(xp / 3000) * 100}%"></span></div><div class="progress-text"><span>${fmt(S.progress.score)} очков</span><span>${fmt(xp)} / 3 000</span></div></div><div class="stat-grid"><div class="stat">${icon("games")}<strong>${S.progress.wins}</strong><small>Уровней пройдено</small></div><div class="stat">${icon("cup")}<strong>${fmt(S.progress.score)}</strong><small>Общий рейтинг</small></div><div class="stat">${icon("snow")}<strong>${fmt(u.snowflakes)}</strong><small>Снежинки</small></div></div><button class="panel gift-banner wide" data-tab="wishlist"><h2>🎁 Мой Тайный Санта</h2><p>${S.me.assignment ? "Получатель уже ждёт твой подарок" : "Вишлист готов. Ждём распределения!"}</p></button><section class="panel menu-list">${[
       ["account", "profile", "Моя анкета и ИНН"],
-      ["cabin", "home", "Мой новогодний домик"],
       ["craft", "craft", "Мастерская и мои игрушки"],
       ["tree", "tree", "Новогодняя ёлка"],
       ["rating", "cup", "Рейтинг игроков"],
@@ -1186,9 +1184,7 @@
       ArcadeSync.restore(syncOptions()).then(sessions=>{for(const session of sessions)syncSessions.set(session.id,session)}).catch(()=>{});
       // A player may already have opened a game while profile/progress loaded.
       if(S.tab==="home"){home();animateIn()}
-      const homeCode=new URLSearchParams(location.search).get("home") || (tg?.initDataUnsafe?.start_param || "").replace(/^home_/, "");
       if(pendingWonderlandTab){const destination=pendingWonderlandTab;pendingWonderlandTab=null;await navigate(destination)}
-      else if(S.tab==="home"&&/^[A-Za-z0-9_-]{10,32}$/.test(homeCode)){visitingHomeCode=homeCode;await navigate("cabin")}
       snow();
     } catch (e) {
       view.innerHTML = `<section class="panel"><h2>Не удалось открыть игры</h2><p style="margin:12px 0">${esc(e.message)}</p><button class="primary wide" id="retry">Повторить</button></section>`;
