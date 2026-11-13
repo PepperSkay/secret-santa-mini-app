@@ -1,6 +1,4 @@
 (() => {
-  let selectedPiece = 0,
-    flagMode = false;
   const symbols = [
     "🎁",
     "🎄",
@@ -27,7 +25,7 @@
       genre: "Логика",
       icon: "🧊",
       endless: true,
-      desc: "Размещай фигуры из трёх предложенных на поле 8×8. Полностью заполненные строки и столбцы эффектно исчезают. Игра продолжается, пока для фигур остаётся место. Побей свой максимальный рекорд.",
+      desc: "Размещай фигуры из трёх предложенных на поле 8×8. Удерживай фигуру над полем: подсветка покажет, куда она встанет и какие линии исчезнут. Красный контур означает, что место занято или фигура не помещается. Можно также выбрать фигуру и нажать на клетку. Игра продолжается, пока для фигур остаётся место.",
     },
     {
       id: "merge2048",
@@ -90,7 +88,7 @@
       b.onclick=e=>{
         const ctx=b._context,st=ctx.state,el=e.target.closest("[data-index],[data-tube]");if(!el||!b.contains(el))return;
         const i=+(el.dataset.index??el.dataset.tube);
-        if(st.game==="blocks"){if(b._piece>=0)ctx.send({piece:b._piece,x:i%8,y:Math.floor(i/8)})}
+        if(st.game==="blocks"){b._placement.clearPreview();if(b._piece>=0)ctx.send({piece:b._piece,x:i%8,y:Math.floor(i/8)})}
         else if(st.game==="mines")ctx.send({i,type:b._flag?"flag":"open"});
         else if(st.game==="memory")ctx.send({i});
         else if(st.game==="sort"){
@@ -100,13 +98,7 @@
       };
       if(s.game==="blocks"){
         b._piece=0;const tray=document.createElement("div");tray.className="block-tray";tray.innerHTML=[0,1,2].map(i=>`<button class="tray-piece" data-piece="${i}" aria-label="Фигура ${i+1}"></button>`).join("");b.after(tray);b._tray=tray;
-        tray.onclick=e=>{const el=e.target.closest("[data-piece]");if(!el||el.disabled)return;b._piece=+el.dataset.piece;tray.querySelectorAll("button").forEach(x=>x.classList.toggle("selected",x===el))};
-        let drag=null,ghost=null;
-        const clear=()=>{ghost?.remove();ghost=null;drag=null};
-        tray.onpointerdown=e=>{const el=e.target.closest("[data-piece]");if(!el||el.disabled)return;b._piece=+el.dataset.piece;drag={x:e.clientX,y:e.clientY};tray.setPointerCapture(e.pointerId)};
-        tray.onpointermove=e=>{if(!drag||Math.hypot(e.clientX-drag.x,e.clientY-drag.y)<10&&!ghost)return;if(!ghost){ghost=document.createElement("div");ghost.className="block-ghost";ghost.innerHTML=shape(b._context.state.tray[b._piece],b._piece);document.body.append(ghost)}ghost.style.transform=`translate(${e.clientX}px,${e.clientY-42}px)`};
-        tray.onpointerup=e=>{if(!drag)return;const moved=!!ghost;clear();if(moved){const cell=document.elementFromPoint(e.clientX,e.clientY-30)?.closest("[data-block-cell]");if(cell&&b.contains(cell)){const i=+cell.dataset.blockCell;b._context.send({piece:b._piece,x:i%8,y:Math.floor(i/8)})}}};
-        tray.onpointercancel=clear;b._dispose=clear;
+        b._placement=BlockPlacement.mount(b,tray,shape);b._dispose=b._placement.dispose;
       }
       if(s.game==="merge2048"){
         const controls=document.createElement("div");controls.className="direction-controls";controls.innerHTML=["left","up","down","right"].map((d,i)=>`<button class="secondary" data-direction="${d}" aria-label="${["Влево","Вверх","Вниз","Вправо"][i]}">${["←","↑","↓","→"][i]}</button>`).join("");b.after(controls);
@@ -122,6 +114,7 @@
     if(s.game==="blocks"){
       s.board.forEach((v,i)=>{const el=cells[i];const cls="block-cell"+(v?" filled color-"+v:"");if(el.className!==cls)el.className=cls});
       if(!s.tray[b._piece])b._piece=s.tray.findIndex(Boolean);
+      b._placement.refresh();
       s.tray.forEach((piece,i)=>{const el=b._tray.children[i],signature=JSON.stringify(piece);el.disabled=!piece;el.classList.toggle("selected",b._piece===i);if(el.dataset.shape!==signature){el.dataset.shape=signature;el.innerHTML=piece?shape(piece,i):"<span>✓</span>"}});
       text(status,`Очищено линий: ${s.lines}${s.combo>1?" · Комбо ×"+s.combo:""} · игра до заполнения поля`);
     }else if(s.game==="merge2048"){

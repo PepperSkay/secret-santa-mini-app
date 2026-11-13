@@ -85,7 +85,7 @@
     toastTimer,
     gameEpoch = 0;
   let moveAnimating=false, queuedMoves=[];
-  const inputStats=window.__SANTA_DIAGNOSTICS__={build:"20261113-input4",samples:[]};
+  const inputStats=window.__SANTA_DIAGNOSTICS__={build:"20261113-placement1",samples:[]};
   document.documentElement.dataset.build=inputStats.build;
   function loadStorage(k, fallback) {
     try {
@@ -1166,8 +1166,8 @@
       const progress = await progressRequest;
       if (progress) S.progress = progress;
       ArcadeSync.restore(syncOptions()).then(sessions=>{for(const session of sessions)syncSessions.set(session.id,session)}).catch(()=>{});
-      home();
-      animateIn();
+      // A player may already have opened a game while profile/progress loaded.
+      if(S.tab==="home"){home();animateIn()}
       snow();
     } catch (e) {
       view.innerHTML = `<section class="panel"><h2>Не удалось открыть игры</h2><p style="margin:12px 0">${esc(e.message)}</p><button class="primary wide" id="retry">Повторить</button></section>`;
