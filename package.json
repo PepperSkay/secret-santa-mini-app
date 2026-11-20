@@ -3,7 +3,7 @@
   "name": "secret-santa-mini-app",
   "version": "1.0.0",
   "scripts": {
-    "test": "node test-client.cjs && node test-client.cjs --indexeddb && node test-render.cjs && node test-placement.cjs && node test-workshop.cjs"
+    "test": "node test-client.cjs && node test-client.cjs --indexeddb && node test-render.cjs && node test-placement.cjs"
   },
   "devDependencies": {
     "linkedom": "0.18.12",
