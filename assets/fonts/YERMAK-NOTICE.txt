@@ -1,0 +1,9 @@
+DS Yermak_D / Regular
+Version 1.0; 2000; initial release (Demo-version)
+Copyright (c) Dubina Nikolay (wwwart@d-s.ru) D-Studio Moscow (www.d-s.ru), 2000. All rights reserved.
+
+Original TTF: https://ttf.su/fonts/ds-yermak-d-regular.ttf
+Font information: https://ttf.su/fonts/ds-yermak-d/
+WOFF2 is a lossless web container conversion. Original glyphs and naming metadata are preserved.
+No claim of an open-source license is made.
+The original demo lacks digits, Cyrillic Yo/Yery, and Latin Q. yermak-ui.woff2 preserves all original outlines and adds Yo (E plus two dots) and Yery (soft sign plus I) for both cases. Digits, punctuation and missing Latin glyphs use the serif fallback in typography.css. Rebuild with scripts/build-yermak.py and fonttools[woff]==4.60.1.

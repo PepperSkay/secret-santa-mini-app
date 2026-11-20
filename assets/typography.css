@@ -1,0 +1,26 @@
+/* DS Yermak_D, with Yo and Yery completed for the full Russian alphabet. */
+@font-face{
+ font-family:"Yermak";
+ src:url("fonts/yermak-ui.woff2") format("woff2");
+ font-weight:100 900;
+ font-style:normal;
+ font-display:swap;
+}
+:root{--santa-font:"Yermak",Georgia,"Times New Roman",serif}
+body{font-family:var(--santa-font);font-synthesis:none;line-height:1.45;letter-spacing:.015em}
+button,input,textarea,select{font-family:var(--santa-font)}
+h1,h2,h3,.hero-copy h1{line-height:1.2;letter-spacing:.01em}
+.wordmark{font-size:18px;letter-spacing:.02em}
+.hero-copy h1{font-size:30px}
+.categories button{font-size:11px;line-height:1.3;flex:0 0 100px;min-width:100px;min-height:72px;padding:9px 6px;overflow-wrap:anywhere}
+.game-card strong{font-size:13px;line-height:1.3;letter-spacing:.015em}
+.game-card small,.game-card .badge{line-height:1.35}
+.game-meter small,.stat small{font-size:12px;line-height:1.35}
+#nav button{font-size:12px;line-height:1.25;letter-spacing:.01em;min-width:0}
+#nav button span{overflow-wrap:normal}
+.stack label,.stack input,.stack textarea,.stack select{line-height:1.45}
+.stack input,.stack textarea,.stack select{font-size:16px}
+.menu-row{line-height:1.4;gap:12px}
+.primary,.secondary,.danger{line-height:1.35}
+.inn{letter-spacing:3px}
+@media(max-width:360px){.hero-copy h1{font-size:27px}.game-card strong{font-size:12px}.categories button{font-size:10px}#nav button{font-size:11px}.wordmark{font-size:16px}}
